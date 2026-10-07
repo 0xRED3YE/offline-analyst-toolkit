@@ -49,9 +49,9 @@ async function launch() {
   const wait = (ms) => page.waitForTimeout(ms);
   const go = async (id) => { await page.evaluate((h) => { location.hash = h; }, id); await wait(150); return page.locator(`#mod-${id}`); };
 
-  await check('all 8 modules are listed and mount', async () => {
+  await check('all 14 modules are listed and mount', async () => {
     const ids = await page.$$eval('#module-list button', (b) => b.map((x) => x.dataset.id));
-    expect(ids.join() === 'encode,hash,ioc,defang,jwt,time,email,lookup', `modules: ${ids}`);
+    expect(ids.join() === 'encode,hash,time,jwt,ps,ioc,defang,url,lookup,email,diff,regex,entropy,case', `modules: ${ids}`);
     for (const id of ids) {
       const m = await go(id);
       expect(await m.isVisible(), `${id} not visible`);
@@ -145,6 +145,64 @@ async function launch() {
     const links = await m.locator('a.btn').evaluateAll((as) => as.map((a) => [a.href, a.rel, a.target]));
     expect(links.length >= 3, 'links');
     for (const [href, rel, target] of links) expect(href.startsWith('https://') && rel.includes('noreferrer') && target === '_blank', href);
+  });
+
+  await check('URL Analyzer: unwraps SafeLinks → Google → obfuscated IP', async () => {
+    const m = await go('url');
+    const inner = `https://www.google.com/url?q=${encodeURIComponent('http://0x7f.0.0.1/login.php')}`;
+    await m.locator('textarea').fill(`https://eur01.safelinks.protection.outlook.com/?url=${encodeURIComponent(inner)}&data=05`);
+    await wait(400);
+    expect((await m.locator('code.big-url').textContent()) === 'http://127.0.0.1/login.php', 'final URL');
+    expect((await m.textContent()).includes('Obfuscated IP address'), 'finding');
+  });
+
+  await check('PowerShell: nested -enc layers decode to readable script', async () => {
+    const m = await go('ps');
+    const enc = (s) => Buffer.from(s, 'utf16le').toString('base64');
+    await m.locator('textarea').fill(`powershell -nop -enc ${enc(`powershell -w hidden -enc ${enc("& (\"{1}{0}\" -f 'ost','Write-H') ('he'+'llo')")}`)}`);
+    await wait(700);
+    expect((await m.locator('pre.output').first().textContent()) === "Write-Host 'hello'", 'final script');
+    expect((await m.textContent()).includes('Hidden window'), 'finding');
+  });
+
+  await check('Text Diff: side by side with word marks', async () => {
+    const m = await go('diff');
+    await m.locator('textarea').nth(0).fill('host=10.0.0.1\nport=443');
+    await m.locator('textarea').nth(1).fill('host=10.0.0.9\nport=443');
+    await wait(400);
+    expect((await m.locator('table.diff mark').allTextContents()).join() === '1,9', 'word marks');
+  });
+
+  await check('Regex Tester: catastrophic pattern is stopped, page stays usable', async () => {
+    const m = await go('regex');
+    await m.locator('textarea').fill(`${'a'.repeat(34)}!`);
+    await m.locator('input.big').fill('(a+)+$');
+    await m.locator('.notice').waitFor({ timeout: 6000 });
+    expect((await m.locator('.notice').textContent()).includes('Stopped'), 'timeout notice');
+    await m.locator('input.big').fill('a{3}');
+    await wait(500);
+    expect((await m.textContent()).includes('11 matches'), 'works again after the timeout');
+  });
+
+  await check('Entropy: random half of a file is flagged', async () => {
+    const m = await go('entropy');
+    const buf = Buffer.concat([crypto.randomBytes(32768), Buffer.alloc(32768, 0x41)]);
+    await m.locator('input[type=file]').setInputFiles({ name: 'half.bin', mimeType: 'application/octet-stream', buffer: buf });
+    await m.locator('svg.entropy-svg').waitFor();
+    const hot = await m.locator('svg rect.bar-hot').count();
+    const all = await m.locator('svg rect.bar, svg rect.bar-hot').count();
+    expect(hot === all / 2, `${hot} of ${all} blocks flagged`);
+  });
+
+  await check('Case Notes: receives IOCs, exports escaped HTML, stores nothing by default', async () => {
+    const m = await go('case');
+    await m.locator('textarea').first().fill('C2 at hxxps://bad-host[.]com/x and 185.220.101.47');
+    await m.getByRole('button', { name: 'Add', exact: true }).click();
+    expect((await m.locator('tbody tr').count()) === 3, 'three IOCs');
+    const [dl] = await Promise.all([page.waitForEvent('download'), m.getByRole('button', { name: 'Download HTML' }).click()]);
+    const html = require('fs').readFileSync(await dl.path(), 'utf8');
+    expect(html.includes('hxxps[://]bad-host[.]com') && html.includes("default-src 'none'"), 'defanged report with CSP');
+    expect(await page.evaluate(() => localStorage.getItem('oat.case.v1')) === null, 'nothing stored without opt-in');
   });
 
   await check('no network requests were made', async () => {

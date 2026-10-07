@@ -403,6 +403,46 @@ code.hash.match { background: var(--ok-soft); color: var(--ok); outline: 1px sol
 .reading-zone { font-size: 14px; }
 .other-readings { display: grid; gap: 8px; }
 
+.module-group {
+  margin: 14px 10px 4px;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted);
+}
+.module-group:first-child { margin-top: 2px; }
+
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 14px; }
+.field { display: grid; gap: 2px; }
+.input.narrow { width: 80px; flex: none; }
+.input.narrow-time { width: auto; flex: 0 0 auto; }
+.panel-lite { margin: -4px 0 14px; padding: 0 4px; }
+.slash { color: var(--muted); font-size: 18px; }
+code.big-url { font-size: 15px; }
+mark { background: var(--warn-soft); color: inherit; border-radius: 2px; outline: 1px solid var(--warn); }
+mark.empty-match { outline-style: dashed; }
+
+/* Diff */
+table.diff { width: 100%; border-collapse: collapse; font: 13px/1.45 var(--mono); table-layout: fixed; }
+table.diff td { padding: 1px 6px; vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
+table.diff td.ln { width: 4.5em; color: var(--muted); text-align: right; user-select: none; border-right: 1px solid var(--border); }
+table.diff td.code.empty { background: var(--surface-2); }
+table.diff tr.row-delete td.code:nth-child(2), table.diff tr.row-change td.code:nth-child(2) { background: var(--error-soft); }
+table.diff tr.row-insert td.code:nth-child(4), table.diff tr.row-change td.code:nth-child(4) { background: var(--ok-soft); }
+table.diff tr.row-change td.code:nth-child(2) mark { background: var(--error); color: var(--bg); outline: 0; }
+table.diff tr.row-change td.code:nth-child(4) mark { background: var(--ok); color: var(--bg); outline: 0; }
+table.diff tr.skip td { text-align: center; color: var(--muted); background: var(--surface-2); font-family: var(--sans); }
+
+/* Entropy chart */
+.entropy-svg { width: 100%; height: 120px; display: block; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.entropy-svg .bar { fill: var(--info); }
+.entropy-svg .bar-hot { fill: var(--error); }
+.entropy-svg .threshold { stroke: var(--muted); stroke-width: 0.6; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+
+/* Case notes */
+select.verdict-malicious { color: var(--error); font-weight: 600; }
+select.verdict-suspicious { color: var(--warn); font-weight: 600; }
+select.verdict-benign { color: var(--ok); }
+
 /* Lookup */
 .links { gap: 6px; }
 a.btn { text-decoration: none; color: var(--text); display: inline-block; }
@@ -461,7 +501,7 @@ a.btn { text-decoration: none; color: var(--text); display: inline-block; }
 <div class="layout">
   <nav class="sidebar" aria-label="Modules">
     <ul id="module-list" class="module-list"></ul>
-    <p class="sidebar-hint">Alt+1…9 switches module</p>
+    <p class="sidebar-hint">Alt+1…9 switches between the first nine</p>
   </nav>
   <label class="module-select-wrap">
     <span class="visually-hidden">Module</span>
@@ -697,15 +737,41 @@ a.btn { text-decoration: none; color: var(--text); display: inline-block; }
     if (entry.api && typeof entry.api.focus === 'function') entry.api.focus();
   }
 
+  // Sidebar groups, in display order. Modules not listed go into a final "More" group.
+  const NAV_GROUPS = [
+    ['Decode & convert', ['encode', 'hash', 'time', 'jwt', 'ps']],
+    ['Indicators', ['ioc', 'defang', 'url', 'lookup', 'email']],
+    ['Analysis', ['diff', 'regex', 'entropy']],
+    ['Case', ['case']],
+  ];
+
+  function groupOf(id) {
+    const g = NAV_GROUPS.findIndex(([, ids]) => ids.includes(id));
+    return g < 0 ? NAV_GROUPS.length : g;
+  }
+
   function buildNav() {
+    // Order modules by group, then by their position in the group.
+    modules.sort((a, b) => groupOf(a.id) - groupOf(b.id) ||
+      (NAV_GROUPS[groupOf(a.id)] ? NAV_GROUPS[groupOf(a.id)][1].indexOf(a.id) - NAV_GROUPS[groupOf(b.id)][1].indexOf(b.id) : 0));
     const list = document.getElementById('module-list');
     const select = document.getElementById('module-select');
+    let currentGroup = -1;
+    let optgroup = null;
     modules.forEach((m, i) => {
+      const g = groupOf(m.id);
+      if (g !== currentGroup) {
+        currentGroup = g;
+        const label = NAV_GROUPS[g] ? NAV_GROUPS[g][0] : 'More';
+        list.append(h('li', { class: 'module-group', role: 'presentation' }, label));
+        optgroup = h('optgroup', { label });
+        select.append(optgroup);
+      }
       list.append(h('li', null,
         h('button', { type: 'button', class: 'module-link', dataset: { id: m.id }, onclick: () => show(m.id) },
           h('span', { class: 'module-key', 'aria-hidden': 'true' }, i < 9 ? String(i + 1) : ''),
           m.name)));
-      select.append(h('option', { value: m.id }, m.name));
+      optgroup.append(h('option', { value: m.id }, m.name));
     });
     select.addEventListener('change', () => show(select.value));
   }
@@ -2351,7 +2417,1029 @@ a.btn { text-decoration: none; color: var(--text); display: inline-block; }
   return { linksFor };
 });
 </script>
-<!-- Modules appear in the sidebar in this order -->
+<script>
+/*
+ * url.js: take a suspicious URL apart without visiting it.
+ *
+ *  - parts: scheme, credentials, host, port, path, query parameters, fragment
+ *  - unwraps redirect wrappers layer by layer: Microsoft SafeLinks, Proofpoint
+ *    URL Defense v1/v2/v3, Google, Facebook, Barracuda and generic ?url= params
+ *  - flags look-alike (punycode) domains, obfuscated IP hosts, user@host tricks,
+ *    shorteners, risky schemes and file downloads
+ */
+(function (root, factory) {
+  const lib = factory();
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).url = lib;
+})(globalThis, function () {
+  'use strict';
+
+  const ioc = () => globalThis.OAT.ioc;
+  const codecs = () => globalThis.OAT.codecs;
+
+  // ---------------------------------------------------------------- Punycode (RFC 3492)
+
+  const BASE = 36, T_MIN = 1, T_MAX = 26, SKEW = 38, DAMP = 700;
+
+  function adapt(delta, numPoints, firstTime) {
+    delta = firstTime ? Math.floor(delta / DAMP) : delta >> 1;
+    delta += Math.floor(delta / numPoints);
+    let k = 0;
+    while (delta > ((BASE - T_MIN) * T_MAX) >> 1) { delta = Math.floor(delta / (BASE - T_MIN)); k += BASE; }
+    return Math.floor(k + ((BASE - T_MIN + 1) * delta) / (delta + SKEW));
+  }
+
+  function punycodeDecode(input) {
+    const output = [];
+    let n = 128, i = 0, bias = 72;
+    let basic = input.lastIndexOf('-');
+    if (basic < 0) basic = 0;
+    for (let j = 0; j < basic; j++) output.push(input.charCodeAt(j));
+    for (let index = basic > 0 ? basic + 1 : 0; index < input.length;) {
+      const oldi = i;
+      let w = 1;
+      for (let k = BASE; ; k += BASE) {
+        if (index >= input.length) throw new Error('Invalid punycode');
+        const c = input.charCodeAt(index++);
+        const digit = c - 48 < 10 ? c - 22 : c - 65 < 26 ? c - 65 : c - 97 < 26 ? c - 97 : BASE;
+        if (digit >= BASE) throw new Error('Invalid punycode');
+        i += digit * w;
+        const t = k <= bias ? T_MIN : k >= bias + T_MAX ? T_MAX : k - bias;
+        if (digit < t) break;
+        w *= BASE - t;
+      }
+      const out = output.length + 1;
+      bias = adapt(i - oldi, out, oldi === 0);
+      n += Math.floor(i / out);
+      i %= out;
+      output.splice(i++, 0, n);
+    }
+    return String.fromCodePoint(...output);
+  }
+
+  function toUnicodeHost(host) {
+    return host.split('.').map((label) => {
+      if (!/^xn--/i.test(label)) return label;
+      try { return punycodeDecode(label.slice(4).toLowerCase()); } catch (_) { return label; }
+    }).join('.');
+  }
+
+  // Characters from other scripts that look like Latin letters.
+  const CONFUSABLE = {
+    'а': 'a', 'в': 'b', 'е': 'e', 'ё': 'e', 'к': 'k', 'м': 'm', 'н': 'h', 'о': 'o', 'р': 'p', 'с': 'c', 'т': 't', 'у': 'y',
+    'х': 'x', 'ѕ': 's', 'і': 'i', 'ї': 'i', 'ј': 'j', 'ӏ': 'l', 'ԁ': 'd', 'ԛ': 'q', 'ԝ': 'w', 'ɡ': 'g', 'һ': 'h', 'ո': 'n',
+    'α': 'a', 'ο': 'o', 'ρ': 'p', 'ν': 'v', 'τ': 't', 'ι': 'i', 'κ': 'k', 'χ': 'x', 'υ': 'u', 'ε': 'e', 'β': 'b',
+    'ı': 'i', 'ł': 'l', 'ß': 'b', 'ð': 'd', 'ø': 'o', 'ö': 'o', 'ó': 'o', 'ò': 'o', 'ô': 'o', 'õ': 'o', 'à': 'a', 'á': 'a',
+    'â': 'a', 'ä': 'a', 'å': 'a', 'ã': 'a', 'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e', 'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i',
+    'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u', 'ç': 'c', 'ñ': 'n', 'ý': 'y', 'ÿ': 'y',
+  };
+
+  function skeleton(text) {
+    return [...text.normalize('NFC')].map((ch) => CONFUSABLE[ch] || CONFUSABLE[ch.toLowerCase()] || ch).join('');
+  }
+
+  function scriptsOf(label) {
+    const found = new Set();
+    for (const ch of label) {
+      if (/[a-z0-9-]/i.test(ch)) found.add('Latin');
+      else if (/\p{Script=Latin}/u.test(ch)) found.add('Latin');
+      else if (/\p{Script=Cyrillic}/u.test(ch)) found.add('Cyrillic');
+      else if (/\p{Script=Greek}/u.test(ch)) found.add('Greek');
+      else if (/\p{Script=Armenian}/u.test(ch)) found.add('Armenian');
+      else if (/\p{L}/u.test(ch)) found.add('Other');
+    }
+    return [...found];
+  }
+
+  // ---------------------------------------------------------------- Redirect unwrapping
+
+  const REDIRECT_PARAMS = ['url', 'u', 'q', 'target', 'redirect', 'redirect_uri', 'redirect_url', 'redirecturl', 'next',
+    'dest', 'destination', 'goto', 'link', 'r', 'return', 'returnurl', 'return_to', 'continue', 'to', 'out', 'href', 'uri', 'a'];
+
+  // Proofpoint v3 replaces some characters with "*" and stores them (Base64URL) after "__;".
+  function proofpointV3(href) {
+    const m = href.match(/\/v3\/__(.+?)__;([^!]*)!/);
+    if (!m) return null;
+    const runLengths = {};
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'.split('').forEach((c, i) => { runLengths[c] = i + 2; });
+    let chars;
+    try { chars = [...codecs().text(codecs().base64Decode(m[2]))]; } catch (_) { chars = []; }
+    let pos = 0;
+    const url = m[1].replace(/\*(\*.)?/g, (tok, run) => {
+      if (!run) return chars[pos++] || '';
+      const len = runLengths[run[1]] || 0;
+      const s = chars.slice(pos, pos + len).join('');
+      pos += len;
+      return s;
+    });
+    return url;
+  }
+
+  // Returns { url, via } for the next layer, or null if this URL does not wrap another.
+  function unwrapOnce(u) {
+    const host = u.hostname.toLowerCase();
+    const p = u.searchParams;
+    const get = (name) => { for (const [k, v] of p) if (k.toLowerCase() === name) return v; return null; };
+
+    if (/\.safelinks\.protection\.outlook\.com$/.test(host) && get('url')) return { url: get('url'), via: 'Microsoft Defender SafeLinks' };
+    if (host === 'urldefense.com' && u.pathname.startsWith('/v3/')) {
+      const v = proofpointV3(u.href);
+      if (v) return { url: v, via: 'Proofpoint URL Defense v3' };
+    }
+    if (/(^|\.)urldefense\.proofpoint\.com$/.test(host)) {
+      if (u.pathname.startsWith('/v2/') && get('u')) return { url: decodeURIComponent(get('u').replace(/-/g, '%').replace(/_/g, '/')), via: 'Proofpoint URL Defense v2' };
+      if (u.pathname.startsWith('/v1/') && get('u')) return { url: get('u'), via: 'Proofpoint URL Defense v1' };
+    }
+    if (/(^|\.)google\.[a-z.]+$/.test(host) && u.pathname === '/url' && (get('q') || get('url'))) return { url: get('q') || get('url'), via: 'Google redirect' };
+    if (/^l\.(facebook|instagram|messenger)\.com$/.test(host) && get('u')) return { url: get('u'), via: 'Facebook link shim' };
+    if (/(^|\.)linkprotect\.cudasvc\.com$/.test(host) && get('a')) return { url: get('a'), via: 'Barracuda Link Protection' };
+
+    // Generic: a parameter whose value is (or Base64-encodes) an http(s) URL.
+    for (const name of REDIRECT_PARAMS) {
+      const v = get(name);
+      if (!v) continue;
+      if (/^(?:https?:)?\/\//i.test(v.trim())) return { url: v.trim().replace(/^\/\//, 'https://'), via: `"${name}" parameter (redirect)` };
+      if (/^aHR0c[A-Za-z0-9+/_=-]{8,}$/.test(v)) {
+        try {
+          const decoded = codecs().text(codecs().base64Decode(v));
+          if (/^https?:\/\//i.test(decoded)) return { url: decoded, via: `"${name}" parameter (Base64)` };
+        } catch (_) { /* not Base64 */ }
+      }
+    }
+    return null;
+  }
+
+  const SHORTENERS = new Set(['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly', 'cutt.ly',
+    'shorturl.at', 'rb.gy', 'tiny.cc', 'bl.ink', 'lnkd.in', 's.id', 't.ly', 'v.gd', 'qrco.de', 'shorturl.com', 'surl.li']);
+
+  const RISKY_EXT = /\.(exe|scr|com|pif|bat|cmd|ps1|vbs|vbe|js|jse|wsf|hta|msi|msix|appx|dll|lnk|iso|img|vhd|vhdx|zip|rar|7z|cab|jar|apk|docm|xlsm|pptm|one|html?|svg)$/i;
+
+  // ---------------------------------------------------------------- Analysis
+
+  function rawAuthority(text) {
+    const m = text.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i);
+    return m ? m[1] : '';
+  }
+
+  function parse(text) {
+    let t = ioc().refang(text.trim());
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(t)) t = `http://${t}`;
+    const u = new URL(t);
+    // Browsers differ here: Chrome percent-encodes some characters into the host
+    // where the URL standard (and Node) refuse it. Treat those hosts as invalid everywhere.
+    if (/[\s%<>"{}|\\^`]/.test(u.hostname)) throw new Error('Not a valid URL');
+    return u;
+  }
+
+  // Returns { layers: [{ url, via, parts, findings }], final } or throws on an unparseable URL.
+  function analyze(input) {
+    const layers = [];
+    let text = input.trim();
+    let via = 'input';
+    const seen = new Set();
+    for (let depth = 0; depth < 10 && text; depth++) {
+      let u;
+      try { u = parse(text); } catch (_) {
+        if (depth === 0) throw new Error('Not a valid URL');
+        layers.push({ url: text, via, parts: null, findings: [{ level: 'medium', text: 'This layer is not a valid URL.' }] });
+        break;
+      }
+      if (seen.has(u.href)) break;
+      seen.add(u.href);
+      const layer = { url: u.href, via, parts: partsOf(u), findings: findingsFor(u, ioc().refang(text)) };
+      layers.push(layer);
+      const next = unwrapOnce(u);
+      if (!next) break;
+      // A wrapper legitimately percent-encodes the URL it carries, so %25 is expected there.
+      layer.findings = layer.findings.filter((f) => !/^Double URL encoding/.test(f.text));
+      text = next.url;
+      via = next.via;
+    }
+    return { layers, final: layers[layers.length - 1] };
+  }
+
+  function partsOf(u) {
+    return {
+      scheme: u.protocol.replace(/:$/, ''),
+      username: decodeURIComponent(u.username),
+      password: u.password ? '(present)' : '',
+      host: u.hostname,
+      hostUnicode: toUnicodeHost(u.hostname),
+      port: u.port,
+      path: safeDecode(u.pathname),
+      query: [...u.searchParams].map(([k, v]) => ({ key: k, value: v })),
+      fragment: safeDecode(u.hash.replace(/^#/, '')),
+    };
+  }
+
+  function safeDecode(s) { try { return decodeURIComponent(s); } catch (_) { return s; } }
+
+  function findingsFor(u, rawText) {
+    const f = [];
+    const add = (level, text) => f.push({ level, text });
+    const scheme = u.protocol.replace(/:$/, '').toLowerCase();
+    const host = u.hostname.toLowerCase();
+
+    if (['javascript', 'data', 'vbscript', 'file'].includes(scheme)) add('high', `"${scheme}:" URL: runs code or opens local content instead of a web page.`);
+    else if (scheme === 'http') add('low', 'Plain http: not encrypted.');
+
+    if (u.username || u.password) {
+      add('high', `Text before "@" ("${decodeURIComponent(u.username)}") is a username, not the site. The real host is ${host}.`);
+    }
+
+    const raw = rawAuthority(rawText).replace(/^.*@/, '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+      if (raw && raw.toLowerCase() !== host) add('high', `Obfuscated IP address: "${raw}" is ${host}.`);
+      else add('medium', `Host is a bare IP address (${host}), not a domain name.`);
+      const scope = ioc().ipScope(host);
+      if (scope !== 'public') add('info', `IP is ${scope}.`);
+    }
+
+    if (/(^|\.)xn--/.test(host)) {
+      const uni = toUnicodeHost(host);
+      const labels = uni.split('.');
+      const mixed = labels.some((l) => scriptsOf(l).length > 1);
+      const looks = skeleton(uni);
+      add(mixed ? 'high' : 'medium', `Internationalised domain: ${host} displays as "${uni}"${looks !== uni ? ` and looks like "${looks}"` : ''}${mixed ? ' (mixes scripts in one label)' : ''}.`);
+    }
+
+    if (SHORTENERS.has(host)) add('medium', `${host} is a URL shortener: the real destination is hidden and cannot be resolved offline.`);
+    if (u.port && !['80', '443'].includes(u.port)) add('low', `Non-standard port ${u.port}.`);
+    if (host.split('.').length > 5) add('low', `Many subdomain levels (${host.split('.').length}): often used to push the real domain out of view.`);
+    if (/%25[0-9a-f]{2}/i.test(u.href)) add('low', 'Double URL encoding (%25..): often used to slip past filters.');
+    if (RISKY_EXT.test(u.pathname)) add('medium', `Path ends in a risky file type (${u.pathname.match(RISKY_EXT)[0]}).`);
+    if (u.href.length > 500) add('info', `Very long URL (${u.href.length} characters).`);
+    if (/^(mimecast|protect-\w+\.mimecast)\b/.test(host) || /\.mimecast\.com$/.test(host)) add('info', 'Mimecast-protected link: the destination is stored by Mimecast and cannot be decoded offline.');
+    return f;
+  }
+
+  return { analyze, punycodeDecode, toUnicodeHost, skeleton, unwrapOnce: (s) => unwrapOnce(parse(s)) };
+});
+</script>
+<script>
+/*
+ * psdeobf.js: make obfuscated PowerShell readable WITHOUT running it.
+ *
+ * Pure text transforms, repeated until nothing changes:
+ *   -EncodedCommand (any abbreviation)      -> decoded script, as a new layer
+ *   [Convert]::FromBase64String + GetString -> the decoded string
+ *   gzip / deflate compressed Base64        -> decompressed, as a new layer (async)
+ *   backtick escapes  I`E`X                 -> IEX
+ *   'a'+'b'                                 -> 'ab'
+ *   ("{1}{0}" -f 'b','a')                   -> 'ab'
+ *   [char]73, [char[]](73,69) -join ''      -> 'I', 'IE'
+ *   'abc'.Replace('a','x'), -replace        -> 'xbc'
+ *   -join 'cba'[-1..-3]                     -> 'abc'
+ *   & ('IEX') / .'IEX'                      -> IEX
+ *
+ * Detection keywords are assembled from pieces at runtime so that antivirus does
+ * not mistake this file (or the bundled toolkit) for malware.
+ */
+(function (root, factory) {
+  const lib = factory();
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).psdeobf = lib;
+})(globalThis, function () {
+  'use strict';
+
+  const codecs = () => globalThis.OAT.codecs;
+  const ioc = () => globalThis.OAT.ioc;
+  const k = (...parts) => parts.join('');
+
+  const SQ = "'((?:[^']|'')*)'";                 // single-quoted string literal, captures the body
+  const sq = (s) => `'${s.replace(/'/g, "''")}'`; // quote a value back as a literal
+  const unsq = (s) => s.replace(/''/g, "'");
+
+  // ---------------------------------------------------------------- Encoded commands
+
+  // -e, -ec, -en, -enc, … -EncodedCommand, with "-", "/" or a dash character.
+  const ENC_SWITCH = (() => {
+    const word = 'encodedcommand';
+    const prefixes = ['ec'];
+    for (let i = word.length; i >= 1; i--) prefixes.push(word.slice(0, i));
+    return new RegExp(`(?:^|[\\s"'])[-/\\u2013\\u2014](?:${prefixes.join('|')})\\s+["']?([A-Za-z0-9+/]{8,}={0,2})["']?`, 'gi');
+  })();
+
+  function decodeBase64Text(b64) {
+    const bytes = codecs().base64Decode(b64);
+    return codecs().looksUtf16le(bytes) ? codecs().text(codecs().utf16leDecode(bytes)) : codecs().text(bytes);
+  }
+
+  // ---------------------------------------------------------------- Cleanup passes
+
+  // Drop obfuscation backticks. Inside double-quoted strings, real escapes
+  // (`n, `t, `0, `", `$ …) are kept; line-continuation backticks join lines.
+  function stripBackticks(s) {
+    let out = '';
+    let q = null;
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (q === "'") {
+        out += c;
+        if (c === "'") { if (s[i + 1] === "'") { out += "'"; i++; } else q = null; }
+        continue;
+      }
+      if (c === '`') {
+        const nx = s[i + 1];
+        if (nx === undefined) continue;
+        if (nx === '\n' || nx === '\r') { i++; if (nx === '\r' && s[i + 1] === '\n') i++; out += ' '; continue; }
+        if (q === '"' && '0abefnrtv"`$'.includes(nx)) { out += c + nx; i++; continue; }
+        out += nx;
+        i++;
+        continue;
+      }
+      if (c === "'" && !q) q = "'";
+      else if (c === '"') q = q === '"' ? null : q || '"';
+      out += c;
+    }
+    return out;
+  }
+
+  // "text" without variables or escapes behaves exactly like 'text'.
+  function normaliseQuotes(s) {
+    return s.replace(/"([^"$`']*)"/g, (m, body) => sq(body));
+  }
+
+  function formatOperator(fmt, args) {
+    return fmt.replace(/\{\{|\}\}|\{(\d+)(?:,[^}:]*)?(?::[^}]*)?\}/g, (m, i) => {
+      if (m === '{{') return '{';
+      if (m === '}}') return '}';
+      return args[Number(i)] !== undefined ? args[Number(i)] : m;
+    });
+  }
+
+  const charCode = (v) => {
+    const n = /^0x/i.test(v) ? parseInt(v, 16) : parseInt(v, 10);
+    return n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '';
+  };
+
+  const PASSES = [
+    // [char]73  /  [char](0x49)
+    [new RegExp('\\[char\\]\\s*\\(?\\s*(0x[0-9a-f]+|\\d{1,7})\\s*\\)?', 'gi'), (m, v) => sq(charCode(v))],
+    // [char[]](73,69,88) -join ''   and   -join [char[]](73,69,88)
+    [/\[char\[\]\]\s*\(\s*((?:(?:0x[0-9a-f]+|\d+)\s*,\s*)*(?:0x[0-9a-f]+|\d+))\s*\)\s*-join\s*(?:''|"")/gi, (m, list) => sq(list.split(',').map((v) => charCode(v.trim())).join(''))],
+    [/-join\s*\[char\[\]\]\s*\(\s*((?:(?:0x[0-9a-f]+|\d+)\s*,\s*)*(?:0x[0-9a-f]+|\d+))\s*\)/gi, (m, list) => sq(list.split(',').map((v) => charCode(v.trim())).join(''))],
+    // 'a' + 'b'
+    [new RegExp(`${SQ}\\s*\\+\\s*${SQ}`, 'g'), (m, a, b) => `'${a}${b}'`],
+    // ("{1}{0}" -f 'b','a')
+    [new RegExp(`\\(\\s*${SQ}\\s*-f\\s*((?:'(?:[^']|'')*'\\s*,\\s*)*'(?:[^']|'')*')\\s*\\)`, 'gi'), (m, fmt, args) => {
+      const list = [...args.matchAll(/'((?:[^']|'')*)'/g)].map((x) => unsq(x[1]));
+      return sq(formatOperator(unsq(fmt), list));
+    }],
+    // 'abc'.Replace('a','x')   ('abc').Replace('a','x')
+    [new RegExp(`\\(?${SQ}\\)?\\.replace\\(\\s*${SQ}\\s*,\\s*${SQ}\\s*\\)`, 'gi'), (m, s, a, b) => sq(unsq(s).split(unsq(a)).join(unsq(b)))],
+    // 'abc' -replace 'a','x'   (PowerShell -replace is a case-insensitive regex)
+    [new RegExp(`${SQ}\\s*-(i|c)?replace\\s*${SQ}\\s*,\\s*${SQ}`, 'gi'), (m, s, mode, a, b) => {
+      try { return sq(unsq(s).replace(new RegExp(unsq(a), mode && mode.toLowerCase() === 'c' ? 'g' : 'gi'), unsq(b))); } catch (_) { return m; }
+    }],
+    // -join 'cba'[-1..-3]   -join ('cba')[-1..-3]
+    [new RegExp(`-join\\s*\\(?\\s*${SQ}\\s*\\)?\\s*\\[\\s*-1\\s*\\.\\.\\s*-\\s*\\(?\\s*\\d+\\s*\\)?\\s*\\]`, 'gi'), (m, s) => sq([...unsq(s)].reverse().join(''))],
+    // ('IEX')  ->  'IEX'   (not a call: no identifier, ] or ) right before the parenthesis)
+    [new RegExp(`(^|[^\\w\\].)])\\(\\s*(${SQ})\\s*\\)`, 'g'), (m, pre, lit) => pre + lit],
+    // & 'IEX' / .'IEX'  ->  IEX
+    [/(^|[\s;(|{=])[.&]\s*'([A-Za-z][\w-]*)'/g, (m, pre, name) => pre + name],
+  ];
+
+  // Inline [Text.Encoding]::X.GetString([Convert]::FromBase64String('...'))
+  const GETSTRING = /\[(?:System\.)?Text\.Encoding\]::(Unicode|UTF8|ASCII|Default|UTF7|BigEndianUnicode)\.GetString\(\s*\[(?:System\.)?Convert\]::FromBase64String\(\s*'([A-Za-z0-9+/=\s]+)'\s*\)\s*\)/gi;
+
+  // Readable keyword casing (case is a common obfuscation trick).
+  const KEYWORDS = [
+    k('Invoke', '-Expression'), k('Invoke', '-WebRequest'), k('Invoke', '-RestMethod'), 'New-Object', 'Start-Process',
+    k('Download', 'String'), k('Download', 'File'), k('Download', 'Data'), k('Net.', 'WebClient'), k('FromBase64', 'String'),
+    'Set-Variable', 'Get-Variable', 'Start-Sleep', 'Out-Null', 'Write-Host', 'ForEach-Object', 'Where-Object',
+    k('Start-Bits', 'Transfer'), 'Add-Type', 'Get-Content', 'Set-Content', 'Remove-Item', 'New-ItemProperty',
+    k('IO.Compression.', 'GzipStream'), k('IO.Compression.', 'DeflateStream'), 'IO.MemoryStream', 'IO.StreamReader',
+    'Text.Encoding', 'Convert', 'GetString', 'ReadToEnd', '-NoProfile', '-WindowStyle', '-ExecutionPolicy', 'Bypass', 'Hidden',
+  ];
+  const KEYWORD_RE = new RegExp(`\\b(${KEYWORDS.map((w) => w.replace(/[.\-]/g, (c) => `\\${c}`)).join('|')})\\b`, 'gi');
+  const KEYWORD_CASE = Object.fromEntries(KEYWORDS.map((w) => [w.toLowerCase(), w]));
+  const IEX = /(^|[^\w-])iex(?![\w-])/gi;
+
+  function fixCase(s) {
+    return s.replace(KEYWORD_RE, (m) => KEYWORD_CASE[m.toLowerCase()] || m).replace(IEX, (m, pre) => `${pre}IEX`);
+  }
+
+  // Put statements on their own lines (outside strings), for reading.
+  function pretty(s) {
+    let out = '';
+    let q = null;
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (q) { out += c; if (c === q) { if (q === "'" && s[i + 1] === "'") { out += "'"; i++; } else q = null; } continue; }
+      if (c === "'" || c === '"') { q = c; out += c; continue; }
+      if (c === ';') { out = out.replace(/[ \t]+$/, '') + ';\n'; while (s[i + 1] === ' ') i++; continue; }
+      out += c;
+    }
+    return out.replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  // One full cleanup of a script: repeat the passes until stable.
+  function clean(script) {
+    let s = stripBackticks(script);
+    for (let round = 0; round < 50; round++) {
+      const before = s;
+      s = normaliseQuotes(s);
+      s = s.replace(GETSTRING, (m, enc, b64) => {
+        try {
+          const bytes = codecs().base64Decode(b64);
+          const t = enc.toLowerCase() === 'unicode' ? codecs().text(codecs().utf16leDecode(bytes)) : codecs().text(bytes);
+          return sq(t);
+        } catch (_) { return m; }
+      });
+      for (const [re, fn] of PASSES) s = s.replace(re, fn);
+      if (s === before) break;
+    }
+    return fixCase(s);
+  }
+
+  // ---------------------------------------------------------------- Findings
+
+  const RULES = [
+    ['high', k('Invoke', '-Expression / IEX: runs a string as code'), new RegExp(`\\b${k('Invoke', '-Expression')}\\b|(^|[^\\w-])IEX(?![\\w-])`, 'i')],
+    ['high', 'Downloads content from the internet', new RegExp(`${k('Download', '(String|File|Data)')}|${k('Invoke', '-(WebRequest|RestMethod)')}|\\biwr\\b|${k('Start-Bits', 'Transfer')}`, 'i')],
+    ['medium', k('Net.', 'WebClient / HTTP client object'), new RegExp(`${k('Net\\.', 'WebClient')}|${k('Net\\.Http\\.', 'HttpClient')}|${k('Msxml2\\.', 'XMLHTTP')}`, 'i')],
+    ['high', 'AMSI bypass attempt', new RegExp(`${k('Amsi', 'Utils')}|${k('amsi', 'InitFailed')}|${k('Amsi', 'ScanBuffer')}`, 'i')],
+    ['high', 'Tampers with Microsoft Defender', new RegExp(`${k('Add-Mp', 'Preference')}|${k('Set-Mp', 'Preference')}.*(Disable|Exclusion)`, 'i')],
+    ['high', 'Loads a .NET assembly from memory', new RegExp(`${k('Reflection\\.', 'Assembly')}\\]::${k('Lo', 'ad')}\\b`, 'i')],
+    ['high', 'Shellcode / process injection APIs', new RegExp(`${k('Virtual', 'Alloc')}|${k('Create', 'Thread')}|${k('WriteProcess', 'Memory')}|${k('CreateRemote', 'Thread')}`, 'i')],
+    ['high', 'Reverse shell (raw TCP client)', new RegExp(`${k('Net\\.Sockets\\.', 'TCPClient')}`, 'i')],
+    ['high', 'Credential theft tooling', new RegExp(`${k('Invoke-Mimi', 'katz')}|${k('sekur', 'lsa')}|${k('lsa', 'dump')}`, 'i')],
+    ['high', 'Deletes shadow copies (ransomware behaviour)', new RegExp(`${k('vssadmin', '.*delete')}|${k('Win32_Shadow', 'Copy')}.*Delete`, 'i')],
+    ['high', 'certutil used to download or decode', new RegExp(`${k('certutil', '.*-(urlcache|decode)')}`, 'i')],
+    ['medium', 'Hidden window', /-w(?:indowstyle)?\s+(?:hidden|1)\b|-win\s+hid/i],
+    ['medium', 'Execution policy bypass', /-e(?:p|x|xecutionpolicy)\s+(?:bypass|unrestricted)/i],
+    ['low', 'No profile (-NoProfile)', /\s-nop(?:rofile)?\b/i],
+    ['medium', 'Decompresses an embedded payload', new RegExp(`${k('IO\\.Compression\\.', '(Gzip|Deflate)Stream')}`, 'i')],
+    ['medium', 'XOR decoding (-bxor)', /-bxor\b/i],
+    ['medium', 'Persistence: scheduled task or Run key', /Register-ScheduledTask|schtasks\b.*\/create|CurrentVersion\\Run/i],
+    ['medium', 'Starts another script host or LOLBin', /\b(mshta|rundll32|regsvr32|wscript|cscript|bitsadmin)(\.exe)?\b/i],
+    ['low', 'Base64 decoding', new RegExp(k('FromBase64', 'String'), 'i')],
+    ['low', 'Environment-variable character tricks (often builds "iex")', /\$(?:env:comspec|pshome|shellid|verbosepreference)\s*\[/i],
+  ];
+
+  function findingsFor(text) {
+    return RULES.filter(([, , re]) => re.test(text)).map(([level, label]) => ({ level, text: label }));
+  }
+
+  // ---------------------------------------------------------------- Layers
+
+  // Synchronous: returns { layers: [{ title, text }], final, findings, iocs }.
+  function deobfuscate(input) {
+    const layers = [{ title: 'Input', text: input }];
+    let current = input;
+    for (let depth = 0; depth < 8; depth++) {
+      const cleaned = clean(current);
+      if (cleaned !== current) layers.push({ title: depth === 0 ? 'Cleaned' : `Layer ${depth + 1} cleaned`, text: cleaned });
+      current = cleaned;
+
+      ENC_SWITCH.lastIndex = 0;
+      const m = ENC_SWITCH.exec(current);
+      if (!m) break;
+      let decoded;
+      try { decoded = decodeBase64Text(m[1]); } catch (_) { break; }
+      layers.push({ title: `Layer ${depth + 2}: -EncodedCommand decoded`, text: decoded });
+      current = decoded;
+    }
+    return finish(layers);
+  }
+
+  function finish(layers) {
+    const final = pretty(layers[layers.length - 1].text);
+    const all = layers.map((l) => l.text).join('\n');
+    return {
+      layers,
+      final,
+      findings: dedupe(findingsFor(all)),
+      iocs: ioc().extract(all).filter((x) => ['url', 'domain', 'ipv4', 'ipv6', 'md5', 'sha1', 'sha256'].includes(x.type)),
+      compressed: findCompressed(final),
+    };
+  }
+
+  function dedupe(list) {
+    const seen = new Set();
+    const order = { high: 0, medium: 1, low: 2, info: 3 };
+    return list.filter((f) => !seen.has(f.text) && seen.add(f.text)).sort((a, b) => order[a.level] - order[b.level]);
+  }
+
+  // Base64 blobs that feed a Gzip/Deflate stream.
+  function findCompressed(text) {
+    if (!new RegExp(k('Compression\\.', '(Gzip|Deflate)Stream'), 'i').test(text)) return [];
+    const kind = new RegExp(k('Gzip', 'Stream'), 'i').test(text) ? 'gzip' : 'deflate-raw';
+    return [...text.matchAll(/'([A-Za-z0-9+/]{40,}={0,2})'/g)].map((m) => ({ b64: m[1], kind }));
+  }
+
+  async function decompress(bytes, kind) {
+    if (typeof DecompressionStream !== 'function') throw new Error('This browser cannot decompress');
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream(kind));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  // Like deobfuscate(), plus gzip/deflate payloads, which need async decompression.
+  async function deobfuscateAll(input) {
+    let result = deobfuscate(input);
+    for (let depth = 0; depth < 5 && result.compressed.length; depth++) {
+      const { b64, kind } = result.compressed[0];
+      let text;
+      try {
+        let bytes = await decompress(codecs().base64Decode(b64), kind);
+        if (codecs().looksUtf16le(bytes)) bytes = codecs().utf16leDecode(bytes);
+        text = codecs().text(bytes);
+      } catch (e) {
+        // A raw-deflate failure may actually be zlib-wrapped; try that once.
+        if (kind === 'deflate-raw') {
+          try { text = codecs().text(await decompress(codecs().base64Decode(b64), 'deflate')); } catch (_) { /* give up */ }
+        }
+        if (text === undefined) break;
+      }
+      const inner = deobfuscate(text);
+      const layers = [...result.layers, { title: `Decompressed ${kind === 'gzip' ? 'gzip' : 'deflate'} payload`, text }, ...inner.layers.slice(1)];
+      result = finish(layers);
+    }
+    return result;
+  }
+
+  return { deobfuscate, deobfuscateAll, clean, stripBackticks, findingsFor };
+});
+</script>
+<script>
+/*
+ * diff.js: line and word diffs (Myers' O(ND) algorithm) and unified diff output.
+ */
+(function (root, factory) {
+  const lib = factory();
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).diff = lib;
+})(globalThis, function () {
+  'use strict';
+
+  const MAX_EDITS = 4000;   // beyond this the inputs are "too different" for a useful diff
+
+  // Edit script between arrays a and b (compared with ===).
+  // Returns [{ op: '=', a: i, b: j } | { op: '-', a: i } | { op: '+', b: j }], or null if too different.
+  function myers(a, b) {
+    let start = 0;
+    while (start < a.length && start < b.length && a[start] === b[start]) start++;
+    let endA = a.length, endB = b.length;
+    while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
+
+    const n = endA - start, m = endB - start;
+    const max = n + m;
+    const off = max + 1;
+    const v = new Int32Array(2 * max + 3);
+    const trace = [];
+    let found = -1;
+
+    outer:
+    for (let d = 0; d <= max; d++) {
+      if (d > MAX_EDITS) return null;
+      trace.push(v.slice(off - d, off + d + 1));
+      for (let k = -d; k <= d; k += 2) {
+        let x = (k === -d || (k !== d && v[off + k - 1] < v[off + k + 1])) ? v[off + k + 1] : v[off + k - 1] + 1;
+        let y = x - k;
+        while (x < n && y < m && a[start + x] === b[start + y]) { x++; y++; }
+        v[off + k] = x;
+        if (x >= n && y >= m) { found = d; break outer; }
+      }
+    }
+
+    // Walk back through the saved states.
+    const rev = [];
+    let x = n, y = m;
+    for (let d = found; d > 0; d--) {
+      const saved = trace[d];                    // state before step d; index k + d
+      const at = (k) => saved[k + d];
+      const k = x - y;
+      const prevK = (k === -d || (k !== d && at(k - 1) < at(k + 1))) ? k + 1 : k - 1;
+      const prevX = at(prevK);
+      const prevY = prevX - prevK;
+      while (x > prevX && y > prevY) { x--; y--; rev.push({ op: '=', a: start + x, b: start + y }); }
+      if (x === prevX) { y--; rev.push({ op: '+', b: start + y }); }
+      else { x--; rev.push({ op: '-', a: start + x }); }
+    }
+    while (x > 0 && y > 0) { x--; y--; rev.push({ op: '=', a: start + x, b: start + y }); }
+
+    const ops = [];
+    for (let i = 0; i < start; i++) ops.push({ op: '=', a: i, b: i });
+    for (let i = rev.length - 1; i >= 0; i--) ops.push(rev[i]);
+    for (let i = 0; i < a.length - endA; i++) ops.push({ op: '=', a: endA + i, b: endB + i });
+    return ops;
+  }
+
+  function splitLines(text) {
+    if (text === '') return [];
+    const lines = text.replace(/\r\n?/g, '\n').split('\n');
+    if (lines[lines.length - 1] === '') lines.pop();
+    return lines;
+  }
+
+  // Line diff with options. Returns { ops, a, b, added, removed, tooDifferent }.
+  function diffText(left, right, { ignoreWhitespace = false, ignoreCase = false } = {}) {
+    const a = splitLines(left), b = splitLines(right);
+    const key = (s) => {
+      let t = ignoreWhitespace ? s.replace(/\s+/g, ' ').trim() : s;
+      if (ignoreCase) t = t.toLowerCase();
+      return t;
+    };
+    let ops = myers(a.map(key), b.map(key));
+    let tooDifferent = false;
+    if (!ops) {
+      tooDifferent = true;
+      ops = [...a.map((_, i) => ({ op: '-', a: i })), ...b.map((_, j) => ({ op: '+', b: j }))];
+    }
+    return {
+      ops, a, b, tooDifferent,
+      added: ops.filter((o) => o.op === '+').length,
+      removed: ops.filter((o) => o.op === '-').length,
+    };
+  }
+
+  // Rows for a side-by-side view: changed blocks are paired line by line.
+  // [{ type: 'equal'|'change'|'delete'|'insert', left?: {n, text}, right?: {n, text} }]
+  function sideBySide(result) {
+    const rows = [];
+    const { ops, a, b } = result;
+    let i = 0;
+    while (i < ops.length) {
+      if (ops[i].op === '=') {
+        rows.push({ type: 'equal', left: { n: ops[i].a + 1, text: a[ops[i].a] }, right: { n: ops[i].b + 1, text: b[ops[i].b] } });
+        i++;
+        continue;
+      }
+      const dels = [], ins = [];
+      while (i < ops.length && ops[i].op !== '=') { (ops[i].op === '-' ? dels : ins).push(ops[i]); i++; }
+      const len = Math.max(dels.length, ins.length);
+      for (let r = 0; r < len; r++) {
+        const d = dels[r], s = ins[r];
+        rows.push({
+          type: d && s ? 'change' : d ? 'delete' : 'insert',
+          left: d ? { n: d.a + 1, text: a[d.a] } : null,
+          right: s ? { n: s.b + 1, text: b[s.b] } : null,
+        });
+      }
+    }
+    return rows;
+  }
+
+  // Word-level diff of two lines: [{ op: '='|'-'|'+', text }].
+  function wordDiff(left, right) {
+    const tok = (s) => s.match(/\s+|[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu) || [];
+    const a = tok(left), b = tok(right);
+    if (a.length * b.length > 250000) return [{ op: '-', text: left }, { op: '+', text: right }];
+    const ops = myers(a, b);
+    if (!ops) return [{ op: '-', text: left }, { op: '+', text: right }];
+    const out = [];
+    for (const o of ops) {
+      const text = o.op === '+' ? b[o.b] : a[o.a];
+      const last = out[out.length - 1];
+      if (last && last.op === o.op) last.text += text;
+      else out.push({ op: o.op, text });
+    }
+    return out;
+  }
+
+  // Standard unified diff with `context` lines around each change.
+  function unified(result, { nameA = 'a', nameB = 'b', context = 3 } = {}) {
+    const { ops, a, b } = result;
+    if (!ops.some((o) => o.op !== '=')) return '';
+    const lines = [`--- ${nameA}`, `+++ ${nameB}`];
+    const changeIdx = ops.map((o, i) => (o.op !== '=' ? i : -1)).filter((i) => i >= 0);
+    let h = 0;
+    while (h < changeIdx.length) {
+      let from = Math.max(0, changeIdx[h] - context);
+      let to = Math.min(ops.length - 1, changeIdx[h] + context);
+      while (h + 1 < changeIdx.length && changeIdx[h + 1] - context <= to + 1) { h++; to = Math.min(ops.length - 1, changeIdx[h] + context); }
+      h++;
+      const slice = ops.slice(from, to + 1);
+      const firstA = slice.find((o) => o.a !== undefined);
+      const firstB = slice.find((o) => o.b !== undefined);
+      const countA = slice.filter((o) => o.op !== '+').length;
+      const countB = slice.filter((o) => o.op !== '-').length;
+      const startA = countA ? firstA.a + 1 : (firstA ? firstA.a : precedingA(ops, from));
+      const startB = countB ? firstB.b + 1 : (firstB ? firstB.b : precedingB(ops, from));
+      lines.push(`@@ -${startA},${countA} +${startB},${countB} @@`);
+      for (const o of slice) lines.push(o.op === '=' ? ` ${a[o.a]}` : o.op === '-' ? `-${a[o.a]}` : `+${b[o.b]}`);
+    }
+    return lines.join('\n') + '\n';
+  }
+
+  function precedingA(ops, i) { for (let j = i - 1; j >= 0; j--) if (ops[j].a !== undefined) return ops[j].a + 1; return 0; }
+  function precedingB(ops, i) { for (let j = i - 1; j >= 0; j--) if (ops[j].b !== undefined) return ops[j].b + 1; return 0; }
+
+  return { myers, diffText, sideBySide, wordDiff, unified, splitLines };
+});
+</script>
+<script>
+/*
+ * regex.js: run a JavaScript regular expression over text and collect matches.
+ * The factory is self-contained so the Regex Tester can run it in a Web Worker
+ * with a timeout (a catastrophic pattern must not freeze the page).
+ */
+(function (root, factory) {
+  const lib = factory();
+  lib.factorySource = '(' + factory.toString() + ')';
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).regex = lib;
+})(globalThis, function () {
+  'use strict';
+
+  // Returns { matches: [{ index, end, text, groups: [..], named: {..} }], truncated, replaced?, error? }
+  function run(pattern, flags, text, { replacement = null, maxMatches = 5000 } = {}) {
+    let re;
+    try { re = new RegExp(pattern, flags.includes('g') ? flags : flags + 'g'); } catch (e) { return { error: e.message, matches: [] }; }
+    const global = flags.includes('g');
+    const unicode = flags.includes('u') || flags.includes('v');
+    const matches = [];
+    let truncated = false;
+    let m;
+    while ((m = re.exec(text))) {
+      matches.push({
+        index: m.index,
+        end: m.index + m[0].length,
+        text: m[0],
+        groups: m.slice(1),
+        named: m.groups ? { ...m.groups } : null,
+      });
+      if (!global) break;
+      if (matches.length >= maxMatches) { truncated = true; break; }
+      if (m[0] === '') {
+        // Step past an empty match (a whole code point in unicode mode).
+        const cp = unicode ? text.codePointAt(re.lastIndex) : 0;
+        re.lastIndex += cp > 0xffff ? 2 : 1;
+      }
+    }
+    const out = { matches, truncated };
+    if (replacement !== null) {
+      try { out.replaced = text.replace(new RegExp(pattern, flags), replacement); } catch (e) { out.error = e.message; }
+    }
+    return out;
+  }
+
+  // Common SOC patterns for the preset menu.
+  const PRESETS = [
+    { name: 'IPv4 address', pattern: '\\b(?:(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\b', flags: 'g' },
+    { name: 'Email address', pattern: '[\\w.%+-]+@[\\w-]+(?:\\.[\\w-]+)+', flags: 'gi' },
+    { name: 'URL', pattern: 'https?:\\/\\/[^\\s"\'<>]+', flags: 'gi' },
+    { name: 'SHA-256 hash', pattern: '\\b[a-f0-9]{64}\\b', flags: 'gi' },
+    { name: 'Windows path', pattern: '[a-z]:\\\\(?:[^\\\\/:*?"<>|\\r\\n]+\\\\)*[^\\\\/:*?"<>|\\r\\n]*', flags: 'gi' },
+    { name: 'Registry key', pattern: '\\b(?:HKLM|HKCU|HKCR|HKU|HKEY_[A-Z_]+)\\\\[^\\s"\']+', flags: 'g' },
+    { name: 'Windows SID', pattern: '\\bS-1-\\d+(?:-\\d+){1,14}\\b', flags: 'g' },
+    { name: 'GUID', pattern: '\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b', flags: 'gi' },
+    { name: 'Base64 blob (40+ chars)', pattern: '[A-Za-z0-9+/]{40,}={0,2}', flags: 'g' },
+    { name: 'Event ID field', pattern: '\\bEventID[=:\\s]+(?<id>\\d{1,5})\\b', flags: 'gi' },
+    { name: 'Username in DOMAIN\\user', pattern: '\\b(?<domain>[A-Z0-9_-]{1,15})\\\\(?<user>[\\w.$-]{1,20})\\b', flags: 'gi' },
+  ];
+
+  return { run, PRESETS };
+});
+</script>
+<script>
+/*
+ * entropy.js: Shannon entropy and printable-string extraction, for triaging
+ * unknown files ("is this packed or encrypted?") and spotting random-looking
+ * values such as DGA domains or keys.
+ */
+(function (root, factory) {
+  const lib = factory();
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).entropy = lib;
+})(globalThis, function () {
+  'use strict';
+
+  const ioc = () => globalThis.OAT.ioc;
+  const k = (...p) => p.join('');
+
+  // Bits per byte (0..8) for bytes[start, end).
+  function shannon(bytes, start = 0, end = bytes.length) {
+    const len = end - start;
+    if (len <= 0) return 0;
+    const counts = new Uint32Array(256);
+    for (let i = start; i < end; i++) counts[bytes[i]]++;
+    let h = 0;
+    for (const c of counts) if (c) { const p = c / len; h -= p * Math.log2(p); }
+    return h;
+  }
+
+  // Entropy over a string's characters (for short values like domains), in bits per character.
+  function shannonText(text) {
+    const chars = [...text];
+    if (!chars.length) return 0;
+    const counts = new Map();
+    for (const c of chars) counts.set(c, (counts.get(c) || 0) + 1);
+    let h = 0;
+    for (const c of counts.values()) { const p = c / chars.length; h -= p * Math.log2(p); }
+    return h;
+  }
+
+  function blocks(bytes, blockSize = 1024) {
+    const out = [];
+    for (let off = 0; off < bytes.length; off += blockSize) out.push(shannon(bytes, off, Math.min(off + blockSize, bytes.length)));
+    return out;
+  }
+
+  function verdict(h) {
+    if (h < 1) return 'very low: repetitive data or padding';
+    if (h < 4.5) return 'low: plain text or structured data';
+    if (h < 6.5) return 'medium: code, mixed or encoded data';
+    if (h < 7.2) return 'high: possibly compressed or packed';
+    return 'very high: likely encrypted or compressed';
+  }
+
+  const isPrint = (b) => (b >= 0x20 && b < 0x7f) || b === 0x09;
+
+  // ASCII and UTF-16LE strings of at least `min` characters, in file order.
+  // Returns { strings: [{ offset, enc, text }], truncated }.
+  function strings(bytes, { min = 4, ascii = true, utf16 = true, max = 100000 } = {}) {
+    const out = [];
+    let truncated = false;
+    if (ascii) {
+      let start = -1;
+      for (let i = 0; i <= bytes.length; i++) {
+        if (i < bytes.length && isPrint(bytes[i])) { if (start < 0) start = i; continue; }
+        if (start >= 0 && i - start >= min) {
+          out.push({ offset: start, enc: 'ascii', text: String.fromCharCode(...bytes.subarray(start, Math.min(i, start + 4096))) });
+          if (out.length >= max) { truncated = true; break; }
+        }
+        start = -1;
+      }
+    }
+    if (utf16 && !truncated) {
+      for (const parity of [0, 1]) {
+        let start = -1;
+        for (let i = parity; i + 1 <= bytes.length; i += 2) {
+          const ok = i + 1 < bytes.length && isPrint(bytes[i]) && bytes[i + 1] === 0;
+          if (ok) { if (start < 0) start = i; continue; }
+          if (start >= 0 && (i - start) / 2 >= min) {
+            let s = '';
+            for (let j = start; j < i && s.length < 4096; j += 2) s += String.fromCharCode(bytes[j]);
+            out.push({ offset: start, enc: 'utf16le', text: s });
+            if (out.length >= max) { truncated = true; break; }
+          }
+          start = -1;
+        }
+        if (truncated) break;
+      }
+    }
+    out.sort((x, y) => x.offset - y.offset);
+    return { strings: out, truncated };
+  }
+
+  // Why a string deserves a second look, or null.
+  const API = new RegExp(`\\b(${[k('Virtual', 'Alloc'), k('VirtualProt', 'ect'), k('WriteProcess', 'Memory'), k('CreateRemote', 'Thread'),
+    k('LoadLib', 'rary'), k('GetProc', 'Address'), k('IsDebugger', 'Present'), k('SetWindows', 'HookEx'), k('Internet', 'OpenUrl'),
+    k('URLDownload', 'ToFile'), k('WinHttp', 'Open'), k('Crypt', 'Encrypt'), k('Shell', 'Execute'), k('Adjust', 'TokenPrivileges'),
+    k('NtUnmap', 'ViewOfSection'), k('Reg', 'SetValue')].join('|')})`, 'i');
+
+  function interesting(text) {
+    if (/https?:\/\/|ftp:\/\//i.test(text)) return 'URL';
+    if (API.test(text)) return 'suspicious API';
+    if (/\b(?:HKLM|HKCU|HKEY_[A-Z_]+|SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run)/i.test(text)) return 'registry';
+    if (/\b(?:cmd\.exe|powershell|wscript|cscript|mshta|rundll32|regsvr32|schtasks|bitsadmin|certutil)\b/i.test(text)) return 'command';
+    if (/\.pdb\b/i.test(text)) return 'debug path';
+    if (/[a-z]:\\|\\\\[\w.-]+\\/i.test(text)) return 'path';
+    if (/^Mozilla\/\d/.test(text)) return 'user agent';
+    const found = ioc().extract(text, { refangFirst: false });
+    if (found.some((x) => x.type === 'ipv4' || x.type === 'domain' || x.type === 'email')) return 'network indicator';
+    return null;
+  }
+
+  // Per-line entropy for lists (domains, hostnames, tokens), highest first.
+  function perLine(text) {
+    return text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+      .map((line) => {
+        const label = line.includes('.') && !line.includes(' ') ? line.split('.').slice(0, -1).join('.') || line : line;
+        return { line, length: line.length, entropy: shannonText(label) };
+      })
+      .sort((a, b) => b.entropy - a.entropy);
+  }
+
+  return { shannon, shannonText, blocks, verdict, strings, interesting, perLine };
+});
+</script>
+<script>
+/*
+ * casereport.js: the Case Notes data model and its exports (Markdown, HTML, JSON).
+ * Exports escape everything: notes and IOCs often contain attacker-controlled text.
+ */
+(function (root, factory) {
+  const lib = factory();
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).casereport = lib;
+})(globalThis, function () {
+  'use strict';
+
+  const ioc = () => globalThis.OAT.ioc;
+  const VERDICTS = ['unknown', 'malicious', 'suspicious', 'benign'];
+  const VERSION = 1;
+
+  function emptyCase(now = new Date()) {
+    return { version: VERSION, title: '', analyst: '', ticket: '', created: now.toISOString(), notes: '', iocs: [], timeline: [] };
+  }
+
+  // Add indicators found in text; returns how many were new.
+  function addIocsFromText(c, text, now = new Date()) {
+    let added = 0;
+    for (const it of ioc().extract(text, { fileLike: false })) {
+      if (c.iocs.some((x) => x.type === it.type && x.value === it.value)) continue;
+      c.iocs.push({ type: it.type, value: it.value, verdict: 'unknown', note: it.note || '', added: now.toISOString() });
+      added++;
+    }
+    return added;
+  }
+
+  // Accepts only the fields we know, with the right types (imported files are untrusted).
+  function fromJson(json) {
+    const d = typeof json === 'string' ? JSON.parse(json) : json;
+    if (!d || typeof d !== 'object') throw new Error('Not a case file');
+    const str = (v, max = 100000) => (typeof v === 'string' ? v.slice(0, max) : '');
+    const c = emptyCase();
+    c.title = str(d.title, 300);
+    c.analyst = str(d.analyst, 200);
+    c.ticket = str(d.ticket, 200);
+    c.created = str(d.created, 40) || c.created;
+    c.notes = str(d.notes);
+    c.iocs = (Array.isArray(d.iocs) ? d.iocs : []).slice(0, 5000).map((x) => ({
+      type: str(x && x.type, 20) || 'unknown',
+      value: str(x && x.value, 2000),
+      verdict: VERDICTS.includes(x && x.verdict) ? x.verdict : 'unknown',
+      note: str(x && x.note, 2000),
+      added: str(x && x.added, 40),
+    })).filter((x) => x.value);
+    c.timeline = (Array.isArray(d.timeline) ? d.timeline : []).slice(0, 5000).map((x) => ({
+      time: str(x && x.time, 40),
+      text: str(x && x.text, 10000),
+    })).filter((x) => x.text);
+    return c;
+  }
+
+  const sortedTimeline = (c) => [...c.timeline].sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+  const show = (v, defang) => (defang ? ioc().defang(v, { fileLike: true }).text : v);
+  // Some Markdown viewers render raw HTML, so < and > are escaped everywhere.
+  const mdText = (s) => String(s).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const mdCell = (s) => mdText(s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+  const mdCode = (s) => { const t = String(s); const fence = t.includes('`') ? '``' : '`'; return `${fence}${t}${fence}`; };
+
+  function toMarkdown(c, { defang = true } = {}) {
+    const out = [];
+    out.push(`# ${mdCell(c.title || 'Untitled case')}`, '');
+    const meta = [['Ticket', c.ticket], ['Analyst', c.analyst], ['Created', c.created]].filter(([, v]) => v);
+    for (const [kname, v] of meta) out.push(`- **${kname}:** ${mdCell(v)}`);
+    if (meta.length) out.push('');
+    if (c.notes.trim()) out.push('## Notes', '', mdText(c.notes.trim()), '');
+    if (c.iocs.length) {
+      out.push(`## Indicators (${c.iocs.length})`, '', '| Type | Indicator | Verdict | Note |', '|---|---|---|---|');
+      for (const x of c.iocs) out.push(`| ${mdCell(x.type)} | ${mdCode(mdCell(show(x.value, defang)))} | ${x.verdict} | ${mdCell(x.note)} |`);
+      out.push('');
+    }
+    if (c.timeline.length) {
+      out.push('## Timeline', '', '| Time | Event |', '|---|---|');
+      for (const t of sortedTimeline(c)) out.push(`| ${mdCell(t.time)} | ${mdCell(t.text)} |`);
+      out.push('');
+    }
+    out.push(`_Generated with Offline Analyst Toolkit${defang ? '. Indicators are defanged' : ''}._`);
+    return out.join('\n') + '\n';
+  }
+
+  const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+  function toHtml(c, { defang = true } = {}) {
+    const rows = (list, cells) => list.map((x) => `<tr>${cells(x).map((v) => `<td>${v}</td>`).join('')}</tr>`).join('\n');
+    return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(c.title || 'Untitled case')}</title>
+<style>
+body{font:15px/1.5 system-ui,sans-serif;max-width:960px;margin:24px auto;padding:0 16px;color:#1b1f24;background:#fff}
+h1{font-size:24px}h2{font-size:18px;margin-top:28px}table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border:1px solid #d9dde3;padding:6px 8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eef0f3}
+code{font:13px ui-monospace,Consolas,monospace}.meta{color:#5f6b7a}pre{white-space:pre-wrap;background:#f6f7f9;padding:10px;border-radius:6px}
+.malicious{color:#b42318;font-weight:600}.suspicious{color:#9a5b00;font-weight:600}.benign{color:#1e7f4f}
+</style></head><body>
+<h1>${esc(c.title || 'Untitled case')}</h1>
+<p class="meta">${[c.ticket && `Ticket: ${esc(c.ticket)}`, c.analyst && `Analyst: ${esc(c.analyst)}`, c.created && `Created: ${esc(c.created)}`].filter(Boolean).join(' · ')}</p>
+${c.notes.trim() ? `<h2>Notes</h2>\n<pre>${esc(c.notes.trim())}</pre>` : ''}
+${c.iocs.length ? `<h2>Indicators (${c.iocs.length})</h2>
+<table><thead><tr><th>Type</th><th>Indicator</th><th>Verdict</th><th>Note</th></tr></thead><tbody>
+${rows(c.iocs, (x) => [esc(x.type), `<code>${esc(show(x.value, defang))}</code>`, `<span class="${esc(x.verdict)}">${esc(x.verdict)}</span>`, esc(x.note)])}
+</tbody></table>` : ''}
+${c.timeline.length ? `<h2>Timeline</h2>
+<table><thead><tr><th>Time</th><th>Event</th></tr></thead><tbody>
+${rows(sortedTimeline(c), (t) => [esc(t.time), esc(t.text)])}
+</tbody></table>` : ''}
+<p class="meta">Generated with Offline Analyst Toolkit${defang ? '. Indicators are defanged' : ''}.</p>
+</body></html>
+`;
+  }
+
+  function toJson(c) {
+    return JSON.stringify({ ...c, version: VERSION }, null, 2);
+  }
+
+  return { VERDICTS, emptyCase, addIocsFromText, fromJson, toMarkdown, toHtml, toJson };
+});
+</script>
+<!-- Sidebar order and groups are set in app.js (NAV_GROUPS) -->
 <script>
 /*
  * Encode / Decode module: build a recipe of byte-level steps (Base64, hex, URL,
@@ -3353,9 +4441,9 @@ self.onmessage = async (e) => {
         const other = readings.map((r, i) => [r, i]).filter(([r]) => !r.likely);
         readingsBox.replaceChildren(
           ...likely.map(([r, i]) => card(r, i)),
-          other.length ? h('details', { class: 'other-readings', open: likely.length === 0 || other.some(([, i]) => i === selected) },
+          ...(other.length ? [h('details', { class: 'other-readings', open: likely.length === 0 || other.some(([, i]) => i === selected) },
             h('summary', null, `${other.length} less likely reading${other.length === 1 ? '' : 's'}`),
-            ...other.map(([r, i]) => card(r, i))) : null);
+            ...other.map(([r, i]) => card(r, i)))] : []));
 
         const ticks = readings[selected].ticks;
         convBox.replaceChildren(ui.table(['Format', 'Value', ''], [
@@ -3530,6 +4618,788 @@ self.onmessage = async (e) => {
       return {
         receive(text) { input.value = text; run(); },
         focus() { input.focus(); },
+      };
+    },
+  });
+})();
+</script>
+<script>
+/*
+ * URL Analyzer module: unwrap redirect layers (SafeLinks, Proofpoint, Google…),
+ * show each URL's parts and flag look-alike domains, obfuscated IPs and tricks.
+ * Nothing is fetched: the analysis is purely on the text of the URL.
+ */
+(function () {
+  'use strict';
+
+  const U = window.OAT.url;
+  const I = window.OAT.ioc;
+
+  window.OAT.register({
+    id: 'url',
+    name: 'URL Analyzer',
+    summary: 'Unwrap SafeLinks, Proofpoint, Google and other redirect wrappers, split a URL into parts, and flag look-alike domains, hidden IPs and other tricks. Nothing is visited.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+      let result = null;
+
+      const input = ui.textarea('Paste a URL (defanged is fine), e.g. a SafeLinks or Proofpoint link from a phishing email', 'URL', { rows: '3' });
+      const out = h('div');
+      root.append(ui.panel('URL', ui.button('Clear', () => { input.value = ''; run(); }), input), out);
+
+      function partsList(p) {
+        const rows = [
+          ['Scheme', p.scheme],
+          p.username ? ['Username', h('span', { class: 'error' }, p.username)] : null,
+          p.password ? ['Password', h('span', { class: 'error' }, p.password)] : null,
+          ['Host', h('code', null, p.host)],
+          p.hostUnicode !== p.host ? ['Host (as displayed)', h('code', null, p.hostUnicode)] : null,
+          p.port ? ['Port', p.port] : null,
+          ['Path', h('code', null, p.path)],
+          p.fragment ? ['Fragment', h('code', null, p.fragment)] : null,
+        ].filter(Boolean);
+        return h('dl', { class: 'kv' }, rows.flatMap(([k, v]) => [h('dt', null, k), h('dd', null, v)]));
+      }
+
+      function run() {
+        const value = input.value.trim();
+        result = null;
+        if (!value) { out.replaceChildren(); return; }
+        try {
+          result = U.analyze(value);
+        } catch (e) {
+          out.replaceChildren(h('p', { class: 'notice' }, e.message));
+          return;
+        }
+        const final = result.final;
+        const finalPanel = ui.panel(result.layers.length > 1 ? `Final destination (after ${result.layers.length - 1} redirect layer${result.layers.length > 2 ? 's' : ''})` : 'Destination',
+          [ui.copyButton(() => final.url), ui.copyButton(() => I.defang(final.url, { fileLike: true }).text, 'Copy defanged'),
+            ui.button('Look up', () => ctx.sendTo('lookup', final.url)), ui.sendSelect(() => final.url)],
+          h('p', null, h('code', { class: 'ioc-value big-url' }, final.url)));
+
+        const layerPanels = result.layers.map((l, i) => ui.panel(i === 0 ? 'Layer 1: as pasted' : `Layer ${i + 1}: unwrapped from ${l.via}`, null,
+          h('p', null, h('code', { class: 'ioc-value' }, l.url)),
+          l.findings.length ? ui.findings(l.findings) : null,
+          l.parts ? h('details', { open: result.layers.length === 1 }, h('summary', null, 'Parts'), partsList(l.parts),
+            l.parts.query.length ? ui.table(['Parameter', 'Value'], l.parts.query.map((q) => [h('code', null, q.key), h('code', { class: 'ioc-value' }, q.value)])) : null) : null));
+
+        out.replaceChildren(finalPanel, ...layerPanels);
+      }
+
+      input.addEventListener('input', ui.debounce(run, 200));
+
+      return {
+        receive(text) { input.value = text.trim().split(/\s*\n/)[0]; run(); },
+        focus() { input.focus(); },
+      };
+    },
+  });
+})();
+</script>
+<script>
+/*
+ * PowerShell Deobfuscator module: decode -EncodedCommand layers, compressed
+ * payloads and common string obfuscation into readable script. The script is
+ * only ever treated as text: nothing is run.
+ */
+(function () {
+  'use strict';
+
+  const P = window.OAT.psdeobf;
+  const L = window.OAT.ioc;
+
+  window.OAT.register({
+    id: 'ps',
+    name: 'PowerShell Deobfuscator',
+    summary: 'Decode -EncodedCommand (any abbreviation), Base64 and gzip/deflate payloads; undo backticks, string joins, -f format strings, [char] codes and reversals. Text only: nothing is executed.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+      let result = null;
+      let runId = 0;
+
+      const input = ui.textarea('Paste a PowerShell command line or script, e.g. from an EDR alert, Event ID 4688/4104, or a scheduled task', 'PowerShell');
+      const out = h('div');
+      root.append(ui.panel('Script', ui.button('Clear', () => { input.value = ''; run(); }), input,
+        h('p', { class: 'meta' }, 'Deobfuscation is pattern-based. It can miss tricks it does not know, and the output is for reading only, never for running.')), out);
+
+      async function run() {
+        const value = input.value;
+        const id = ++runId;
+        if (!value.trim()) { result = null; out.replaceChildren(); return; }
+        let r;
+        try { r = await P.deobfuscateAll(value); } catch (e) { out.replaceChildren(h('p', { class: 'notice' }, e.message)); return; }
+        if (id !== runId) return;   // a newer run started while we were decompressing
+        result = r;
+
+        const finalOut = h('pre', { class: 'output', tabindex: '0', 'aria-label': 'Deobfuscated script' });
+        finalOut.textContent = r.final;
+        const labels = Object.fromEntries(L.TYPES.map((t) => [t.id, t.label]));
+
+        out.replaceChildren(...[
+          ui.panel('Findings', null, ui.findings(r.findings)),
+          ui.panel(`Result${r.layers.length > 2 ? ` (${r.layers.length - 1} steps)` : ''}`,
+            [ui.copyButton(() => r.final), ui.button('Download', () => ctx.download('deobfuscated.ps1.txt', r.final, 'text/plain;charset=utf-8')), ui.sendSelect(() => r.final)],
+            finalOut),
+          r.iocs.length ? ui.panel('Indicators in the script', [ui.button('Send to IOC Extractor', () => ctx.sendTo('ioc', r.iocs.map((x) => x.value).join('\n')))],
+            ui.table(['Type', 'Indicator', ''], r.iocs.map((x) => [labels[x.type], h('code', { class: 'ioc-value' }, x.value), ui.button('Look up', () => ctx.sendTo('lookup', x.value))]))) : null,
+          r.layers.length > 2 ? ui.panel('All steps', null, ...r.layers.slice(1, -1).map((l) => {
+            const pre = h('pre', { class: 'output' });
+            pre.textContent = l.text;
+            return h('details', null, h('summary', null, l.title), pre);
+          })) : null,
+        ].filter(Boolean));
+      }
+
+      input.addEventListener('input', ui.debounce(run, 250));
+
+      return {
+        receive(text) { input.value = text; run(); },
+        focus() { input.focus(); },
+      };
+    },
+  });
+})();
+</script>
+<script>
+/*
+ * Text Diff module: compare two configs, scripts or logs side by side, with
+ * word-level highlights, and export a unified .diff.
+ */
+(function () {
+  'use strict';
+
+  const D = window.OAT.diff;
+  const BIG = 3000;          // rows above this: show only changes with context
+  const CONTEXT = 3;
+
+  window.OAT.register({
+    id: 'diff',
+    name: 'Text Diff',
+    summary: 'Compare two configs, scripts or logs side by side with word-level highlights. Ignore whitespace or case; export a unified .diff.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+      let last = null;
+
+      const left = ui.textarea('Original (paste or drop a file)', 'Original text', { rows: '10' });
+      const right = ui.textarea('Changed (paste or drop a file)', 'Changed text', { rows: '10' });
+      const leftName = h('span', { class: 'meta' }, '');
+      const rightName = h('span', { class: 'meta' }, '');
+      const ignoreWs = h('input', { type: 'checkbox' });
+      const ignoreCase = h('input', { type: 'checkbox' });
+      const onlyChanges = h('input', { type: 'checkbox' });
+      const stats = h('span', { class: 'meta' });
+      const view = h('div', { class: 'diff-view' });
+
+      const pane = (title, ta, nameEl) => {
+        const fileInput = h('input', { type: 'file', hidden: true });
+        fileInput.addEventListener('change', () => { if (fileInput.files[0]) load(fileInput.files[0], ta, nameEl); fileInput.value = ''; });
+        ui.onFileDrop(ta, (files) => load(files[0], ta, nameEl));
+        return ui.panel(title, [nameEl, ui.button('Open file…', () => fileInput.click())], ta, fileInput);
+      };
+
+      root.append(
+        h('div', { class: 'grid-2' }, pane('Original', left, leftName), pane('Changed', right, rightName)),
+        h('div', { class: 'row options panel-lite' },
+          h('label', { class: 'check' }, ignoreWs, 'Ignore whitespace'),
+          h('label', { class: 'check' }, ignoreCase, 'Ignore case'),
+          h('label', { class: 'check' }, onlyChanges, 'Only show changes'),
+          ui.button('Swap', () => { [left.value, right.value] = [right.value, left.value]; [leftName.textContent, rightName.textContent] = [rightName.textContent, leftName.textContent]; run(); })),
+        ui.panel('Differences', [stats, ui.copyButton(unifiedText, 'Copy .diff'),
+          ui.button('Download .diff', () => ctx.download('changes.diff', unifiedText(), 'text/x-diff;charset=utf-8'))], view));
+
+      async function load(file, ta, nameEl) {
+        const text = await ui.readTextFile(file);
+        if (text === null) return;
+        ta.value = text;
+        nameEl.textContent = file.name;
+        run();
+      }
+
+      function unifiedText() {
+        return last ? D.unified(last, { nameA: leftName.textContent || 'original', nameB: rightName.textContent || 'changed' }) : '';
+      }
+
+      function cell(side, row) {
+        const line = row[side];
+        if (!line) return [h('td', { class: 'ln' }), h('td', { class: 'code empty' })];
+        const code = h('td', { class: 'code' });
+        if (row.type === 'change' && line.text.length < 2000 && row.left.text.length < 2000 && row.right.text.length < 2000) {
+          for (const part of D.wordDiff(row.left.text, row.right.text)) {
+            if (part.op === '=') code.append(part.text);
+            else if ((part.op === '-' && side === 'left') || (part.op === '+' && side === 'right')) code.append(h('mark', null, part.text));
+          }
+        } else {
+          code.textContent = line.text;
+        }
+        return [h('td', { class: 'ln' }, String(line.n)), code];
+      }
+
+      function run() {
+        if (!left.value && !right.value) { last = null; view.replaceChildren(h('p', { class: 'meta' }, 'Paste two texts to compare.')); stats.textContent = ''; return; }
+        last = D.diffText(left.value, right.value, { ignoreWhitespace: ignoreWs.checked, ignoreCase: ignoreCase.checked });
+        const rows = D.sideBySide(last);
+        stats.textContent = last.added || last.removed ? `+${last.added} −${last.removed} lines` : 'Identical';
+        if (!last.added && !last.removed) { view.replaceChildren(h('p', { class: 'meta ok' }, '✓ No differences.')); return; }
+
+        // Collapse long unchanged stretches when asked, or when the diff is big.
+        const collapse = onlyChanges.checked || rows.length > BIG;
+        const keep = new Uint8Array(rows.length);
+        rows.forEach((r, i) => { if (r.type !== 'equal') for (let j = Math.max(0, i - CONTEXT); j <= Math.min(rows.length - 1, i + CONTEXT); j++) keep[j] = 1; });
+
+        const tbody = h('tbody');
+        let skipped = 0;
+        const flushSkip = () => {
+          if (skipped) tbody.append(h('tr', { class: 'skip' }, h('td', { colspan: '4' }, `… ${skipped} unchanged line${skipped === 1 ? '' : 's'} …`)));
+          skipped = 0;
+        };
+        rows.forEach((r, i) => {
+          if (collapse && !keep[i]) { skipped++; return; }
+          flushSkip();
+          tbody.append(h('tr', { class: `row-${r.type}` }, ...cell('left', r), ...cell('right', r)));
+        });
+        flushSkip();
+        view.replaceChildren(...[
+          last.tooDifferent ? h('p', { class: 'notice' }, 'The texts are too different for a line-by-line match; showing them as fully replaced.') : null,
+          h('div', { class: 'table-wrap' }, h('table', { class: 'diff' }, tbody)),
+        ].filter(Boolean));
+      }
+
+      const rerun = ui.debounce(run, 250);
+      for (const el of [left, right]) el.addEventListener('input', rerun);
+      for (const el of [ignoreWs, ignoreCase, onlyChanges]) el.addEventListener('change', run);
+      run();
+
+      return {
+        receive(text) { if (!left.value) left.value = text; else right.value = text; run(); },
+        focus() { left.focus(); },
+      };
+    },
+  });
+})();
+</script>
+<script>
+/*
+ * Regex Tester module: test a pattern against sample logs with highlighted
+ * matches, groups and replace. Matching runs in a Web Worker with a time limit,
+ * so a catastrophic-backtracking pattern cannot freeze the page.
+ */
+(function () {
+  'use strict';
+
+  const R = window.OAT.regex;
+  const TIMEOUT_MS = 2000;
+  const HIGHLIGHT_LIMIT = 500000;   // characters rendered with highlights
+
+  const WORKER_SOURCE = `'use strict';
+const R = ${R.factorySource}();
+self.onmessage = (e) => {
+  const { id, pattern, flags, text, replacement } = e.data;
+  self.postMessage({ id, result: R.run(pattern, flags, text, { replacement }) });
+};`;
+
+  let workerUrl = null;
+  function newWorker() {
+    try {
+      if (!workerUrl) workerUrl = URL.createObjectURL(new Blob([WORKER_SOURCE], { type: 'text/javascript' }));
+      return new Worker(workerUrl);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  window.OAT.register({
+    id: 'regex',
+    name: 'Regex Tester',
+    summary: 'Test JavaScript regular expressions against sample logs: highlighted matches, capture groups, replace, and ready-made SOC patterns. Runs with a time limit.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+      let worker = null;
+      let seq = 0;
+      let timer = null;
+      let lastResult = null;
+
+      const pattern = h('input', { type: 'text', class: 'input mono big', spellcheck: 'false', autocomplete: 'off', placeholder: 'Pattern, e.g. (?<ip>\\d+\\.\\d+\\.\\d+\\.\\d+)', 'aria-label': 'Regular expression' });
+      const flagBoxes = Object.fromEntries(['g', 'i', 'm', 's', 'u'].map((f) => [f, h('input', { type: 'checkbox', checked: f === 'g' })]));
+      const flagHelp = { g: 'global', i: 'ignore case', m: 'multiline ^$', s: 'dot matches newline', u: 'unicode' };
+      const presets = h('select', { 'aria-label': 'Preset patterns' }, h('option', { value: '' }, 'Presets…'), R.PRESETS.map((p, i) => h('option', { value: String(i) }, p.name)));
+      const text = ui.textarea('Sample text or log lines to test against', 'Test text', { rows: '8' });
+      const replaceOn = h('input', { type: 'checkbox' });
+      const replacement = h('input', { type: 'text', class: 'input mono', placeholder: 'Replacement, e.g. [$1] or $<ip>', 'aria-label': 'Replacement', disabled: true });
+      const status = h('span', { class: 'meta' });
+      const highlighted = h('pre', { class: 'output', tabindex: '0', 'aria-label': 'Text with matches highlighted' });
+      const matchesBox = h('div');
+      const replacedOut = h('pre', { class: 'output', tabindex: '0', 'aria-label': 'Replaced text', hidden: true });
+
+      root.append(
+        ui.panel('Pattern', [presets],
+          h('div', { class: 'row' }, h('span', { class: 'mono slash' }, '/'), pattern, h('span', { class: 'mono slash' }, '/')),
+          h('div', { class: 'row options' }, Object.entries(flagBoxes).map(([f, box]) => h('label', { class: 'check', title: flagHelp[f] }, box, h('code', null, f), h('span', { class: 'meta' }, flagHelp[f])))),
+          h('p', { class: 'meta' }, 'JavaScript regex flavour: close to PCRE, but no possessive quantifiers or atomic groups, and lookbehind must be fixed-width in other engines.')),
+        ui.panel('Test text', [h('label', { class: 'check' }, replaceOn, 'Replace'), replacement], text),
+        ui.panel('Matches', [status, ui.copyButton(() => (lastResult ? lastResult.matches.map((m) => m.text).join('\n') : ''), 'Copy matches'),
+          ui.sendSelect(() => (lastResult ? lastResult.matches.map((m) => m.text).join('\n') : ''))],
+          highlighted, replacedOut, matchesBox));
+
+      function flags() { return Object.entries(flagBoxes).filter(([, b]) => b.checked).map(([f]) => f).join(''); }
+
+      function run() {
+        clearTimeout(timer);
+        if (!pattern.value) { show({ matches: [] }, true); status.textContent = ''; return; }
+        if (!worker) worker = newWorker();
+        const msg = { id: ++seq, pattern: pattern.value, flags: flags(), text: text.value, replacement: replaceOn.checked ? replacement.value : null };
+        if (!worker) { show(R.run(msg.pattern, msg.flags, msg.text, { replacement: msg.replacement })); return; }   // no workers: run inline
+        status.textContent = 'Running…';
+        worker.onmessage = (e) => { if (e.data.id === seq) { clearTimeout(timer); show(e.data.result); } };
+        worker.onerror = (e) => {   // worker could not start (e.g. blocked by policy): run inline instead
+          e.preventDefault();
+          clearTimeout(timer);
+          worker = null;
+          show(R.run(msg.pattern, msg.flags, msg.text, { replacement: msg.replacement }));
+        };
+        timer = setTimeout(() => {
+          worker.terminate();
+          worker = null;
+          status.textContent = '';
+          matchesBox.replaceChildren(h('p', { class: 'notice' }, `Stopped after ${TIMEOUT_MS / 1000} s: the pattern is probably backtracking catastrophically (nested quantifiers like (a+)+ are the usual cause).`));
+          highlighted.textContent = text.value.slice(0, HIGHLIGHT_LIMIT);
+        }, TIMEOUT_MS);
+        worker.postMessage(msg);
+      }
+
+      function show(result, empty = false) {
+        lastResult = result;
+        if (result.error) {
+          status.textContent = '';
+          matchesBox.replaceChildren(h('p', { class: 'notice' }, result.error));
+          highlighted.textContent = text.value.slice(0, HIGHLIGHT_LIMIT);
+          replacedOut.hidden = true;
+          return;
+        }
+        const ms = result.matches;
+        if (!empty) status.textContent = `${ms.length}${result.truncated ? '+' : ''} match${ms.length === 1 ? '' : 'es'}`;
+
+        // Highlight: alternate plain text nodes and <mark> elements.
+        const t = text.value.slice(0, HIGHLIGHT_LIMIT);
+        const frag = document.createDocumentFragment();
+        let pos = 0;
+        for (const m of ms) {
+          if (m.index >= t.length) break;
+          if (m.index > pos) frag.append(t.slice(pos, m.index));
+          frag.append(h('mark', { class: m.text ? '' : 'empty-match' }, m.text || '​'));
+          pos = Math.max(pos, m.end);
+        }
+        frag.append(t.slice(pos));
+        highlighted.replaceChildren(frag);
+
+        replacedOut.hidden = result.replaced === undefined;
+        if (result.replaced !== undefined) replacedOut.textContent = result.replaced;
+
+        const groupCount = ms.length ? ms[0].groups.length : 0;
+        const named = ms.length && ms[0].named ? Object.keys(ms[0].named) : [];
+        matchesBox.replaceChildren(ms.length
+          ? ui.table(['#', 'Index', 'Match', ...Array.from({ length: groupCount }, (_, i) => named[i] ? `$${i + 1} (${named[i]})` : `$${i + 1}`)],
+            ms.slice(0, 1000).map((m, i) => [String(i + 1), String(m.index), h('code', null, m.text), ...m.groups.map((g) => (g === undefined ? h('span', { class: 'meta' }, '—') : h('code', null, g)))]))
+          : h('p', { class: 'meta' }, empty ? '' : 'No matches.'));
+      }
+
+      presets.addEventListener('change', () => {
+        const p = R.PRESETS[Number(presets.value)];
+        presets.value = '';
+        if (!p) return;
+        pattern.value = p.pattern;
+        for (const [f, box] of Object.entries(flagBoxes)) box.checked = p.flags.includes(f);
+        run();
+      });
+      const rerun = ui.debounce(run, 200);
+      for (const el of [pattern, text, replacement]) el.addEventListener('input', rerun);
+      for (const box of Object.values(flagBoxes)) box.addEventListener('change', run);
+      replaceOn.addEventListener('change', () => { replacement.disabled = !replaceOn.checked; run(); });
+
+      return {
+        receive(value) { text.value = value; run(); },
+        focus() { pattern.focus(); },
+      };
+    },
+  });
+})();
+</script>
+<script>
+/*
+ * Entropy / Strings module: is this file packed or encrypted? What readable
+ * strings are inside it? Which values in a list look random (DGA domains)?
+ */
+(function () {
+  'use strict';
+
+  const E = window.OAT.entropy;
+  const C = window.OAT.codecs;
+  const H = window.OAT.hashes;
+  const MAX_FILE = 200 * 1024 * 1024;
+  const SHOW_STRINGS = 2000;
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  window.OAT.register({
+    id: 'entropy',
+    name: 'Entropy / Strings',
+    summary: 'Shannon entropy of a file or text (packed? encrypted?), an entropy profile, ASCII and UTF-16 strings with offsets, and per-line entropy for spotting random-looking domains.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+      let bytes = null;
+      let fileName = '';
+      let found = [];
+
+      const fileInput = h('input', { type: 'file', hidden: true });
+      const drop = h('div', { class: 'dropzone', tabindex: '0', role: 'button', 'aria-label': 'Choose a file to analyse' },
+        h('strong', null, 'Drop a file here'), ' or click to choose (up to 200 MB). Read locally; nothing is uploaded.');
+      const textIn = ui.textarea('…or paste text. One value per line gives a per-line entropy ranking (e.g. domains from DNS logs).', 'Text', { rows: '5' });
+
+      const summary = h('div');
+      const chart = h('div', { class: 'entropy-chart' });
+      const minLen = h('input', { type: 'number', class: 'input narrow', min: '3', max: '64', value: '6', 'aria-label': 'Minimum string length' });
+      const onlyInteresting = h('input', { type: 'checkbox' });
+      const filter = h('input', { type: 'text', class: 'input', placeholder: 'Filter strings', 'aria-label': 'Filter strings' });
+      const stringsBox = h('div');
+      const stringsMeta = h('span', { class: 'meta' });
+      const perLineBox = h('div');
+
+      const filePanels = h('div', { hidden: true },
+        ui.panel('Summary', null, summary, chart),
+        ui.panel('Strings', [stringsMeta,
+          ui.copyButton(() => visibleStrings().map((s) => s.text).join('\n'), 'Copy'),
+          ui.button('Download', () => ctx.download(`${fileName || 'data'}.strings.txt`, visibleStrings().map((s) => `${s.offset.toString(16).padStart(8, '0')}  ${s.enc === 'ascii' ? 'A' : 'U'}  ${s.text}`).join('\n'), 'text/plain;charset=utf-8')),
+          ui.sendSelect(() => visibleStrings().map((s) => s.text).join('\n'))],
+          h('div', { class: 'row options' }, h('label', { class: 'row' }, 'Min length', minLen), h('label', { class: 'check' }, onlyInteresting, 'Only interesting'), filter),
+          stringsBox));
+      const textPanel = h('div', { hidden: true }, ui.panel('Text entropy', null, perLineBox));
+
+      root.append(ui.panel('Input', [ui.button('Clear', clearAll)], drop, fileInput, textIn), filePanels, textPanel);
+
+      // ---------------------------------------------------------- File analysis
+
+      async function loadFile(file) {
+        if (file.size > MAX_FILE) { ctx.toast('File is over 200 MB'); return; }
+        bytes = new Uint8Array(await file.arrayBuffer());
+        fileName = file.name;
+        textIn.value = '';
+        textPanel.hidden = true;
+        analyseBytes();
+      }
+
+      function analyseBytes() {
+        const h0 = E.shannon(bytes);
+        // At least 1 KB per block: on fewer samples even random data measures below 7.2 bits/byte.
+        const blockSize = bytes.length > 64 * 1024 * 1024 ? 65536 : bytes.length > 4 * 1024 * 1024 ? 16384 : bytes.length > 256 * 1024 ? 4096 : 1024;
+        const profile = E.blocks(bytes, blockSize);
+        const highShare = profile.filter((x) => x >= 7.2).length / (profile.length || 1);
+        const kind = C.sniff(bytes);
+        summary.replaceChildren(h('dl', { class: 'kv' },
+          h('dt', null, 'File'), h('dd', null, `${fileName} · ${formatSize(bytes.length)}${kind ? ` · ${kind}` : ''}`),
+          h('dt', null, 'Entropy'), h('dd', null, h('strong', null, `${h0.toFixed(3)} bits/byte`), ` · ${E.verdict(h0)}`),
+          h('dt', null, 'High-entropy blocks'), h('dd', null, `${Math.round(highShare * 100)}% of ${profile.length} blocks of ${formatSize(blockSize)} are ≥ 7.2`),
+          bytes.length <= 50 * 1024 * 1024 ? [h('dt', null, 'SHA-256'), h('dd', null, h('code', null, H.toHex(H.hash('sha256', bytes))))] : null));
+        chart.replaceChildren(renderChart(profile, blockSize));
+        found = E.strings(bytes, { min: Number(minLen.value) || 6 });
+        for (const s of found.strings) s.why = undefined;
+        filePanels.hidden = false;
+        renderStrings();
+      }
+
+      // Entropy per block as bars (0–8), with the 7.2 "likely packed/encrypted" line.
+      function renderChart(profile, blockSize) {
+        const width = Math.min(600, profile.length) || 1;
+        const per = profile.length / width;
+        const svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('viewBox', `0 0 ${width} 100`);
+        svg.setAttribute('preserveAspectRatio', 'none');
+        svg.setAttribute('class', 'entropy-svg');
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', 'Entropy per block, 0 to 8 bits per byte');
+        for (let x = 0; x < width; x++) {
+          let v = 0;
+          for (let i = Math.floor(x * per); i < Math.max(Math.floor((x + 1) * per), Math.floor(x * per) + 1) && i < profile.length; i++) v = Math.max(v, profile[i]);
+          const r = document.createElementNS(SVG_NS, 'rect');
+          r.setAttribute('x', String(x));
+          r.setAttribute('width', '1');
+          r.setAttribute('y', String(100 - (v / 8) * 100));
+          r.setAttribute('height', String((v / 8) * 100));
+          r.setAttribute('class', v >= 7.2 ? 'bar-hot' : 'bar');
+          svg.append(r);
+        }
+        const line = document.createElementNS(SVG_NS, 'line');
+        for (const [k, v] of Object.entries({ x1: 0, x2: width, y1: 10, y2: 10, class: 'threshold' })) line.setAttribute(k, String(v));
+        svg.append(line);
+        return h('div', null, svg, h('p', { class: 'meta' }, `Each bar is the highest entropy in its slice of the file (block size ${formatSize(blockSize)}). Dashed line: 7.2 bits/byte; red bars above it are likely compressed or encrypted.`));
+      }
+
+      function visibleStrings() {
+        const q = filter.value.trim().toLowerCase();
+        return found.strings.filter((s) => {
+          if (q && !s.text.toLowerCase().includes(q)) return false;
+          if (onlyInteresting.checked) {
+            if (s.why === undefined) s.why = E.interesting(s.text);
+            return Boolean(s.why);
+          }
+          return true;
+        });
+      }
+
+      function renderStrings() {
+        const list = visibleStrings();
+        stringsMeta.textContent = `${list.length.toLocaleString()} of ${found.strings.length.toLocaleString()}${found.truncated ? '+' : ''} strings`;
+        const shown = list.slice(0, SHOW_STRINGS);
+        stringsBox.replaceChildren(...[
+          ui.table(['Offset', 'Enc', 'String', ''], shown.map((s) => {
+            if (s.why === undefined) s.why = E.interesting(s.text);
+            return [h('code', null, s.offset.toString(16).padStart(8, '0')), s.enc === 'ascii' ? 'ASCII' : 'UTF-16', h('code', { class: 'ioc-value' }, s.text),
+              s.why ? h('span', { class: 'badge badge-medium' }, s.why) : ''];
+          })),
+          list.length > SHOW_STRINGS ? h('p', { class: 'meta' }, `Showing the first ${SHOW_STRINGS.toLocaleString()}. Use the filter, or Download for all.`) : null,
+        ].filter(Boolean));
+      }
+
+      // ---------------------------------------------------------- Text analysis
+
+      function analyseText() {
+        const t = textIn.value;
+        if (!t.trim()) { textPanel.hidden = true; return; }
+        bytes = null;
+        filePanels.hidden = true;
+        textPanel.hidden = false;
+        const b = C.utf8(t);
+        const lines = E.perLine(t);
+        perLineBox.replaceChildren(
+          h('dl', { class: 'kv' }, h('dt', null, 'Whole text'), h('dd', null, h('strong', null, `${E.shannon(b).toFixed(3)} bits/byte`), ` · ${E.verdict(E.shannon(b))}`)),
+          ...(lines.length > 1 ? [
+            h('p', { class: 'meta' }, 'Per line, highest first. For domains the TLD is ignored. Random-looking names (DGA, tunnelling) usually score above 3.5 bits/char when 10+ characters long.'),
+            ui.table(['Value', 'Length', 'Bits/char'], lines.slice(0, 2000).map((l) => [h('code', { class: 'ioc-value' }, l.line), String(l.length),
+              h('span', { class: l.entropy >= 3.5 && l.length >= 10 ? 'badge badge-medium' : '' }, l.entropy.toFixed(2))])),
+          ] : []));
+      }
+
+      function clearAll() {
+        bytes = null; found = []; fileName = ''; textIn.value = '';
+        filePanels.hidden = true; textPanel.hidden = true;
+      }
+
+      drop.addEventListener('click', () => fileInput.click());
+      drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+      fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); fileInput.value = ''; });
+      ui.onFileDrop(drop, (files) => loadFile(files[0]));
+      textIn.addEventListener('input', ui.debounce(analyseText, 200));
+      minLen.addEventListener('change', () => { if (bytes) { found = E.strings(bytes, { min: Math.max(3, Number(minLen.value) || 6) }); renderStrings(); } });
+      onlyInteresting.addEventListener('change', renderStrings);
+      filter.addEventListener('input', ui.debounce(renderStrings, 150));
+
+      return {
+        receive(text) { textIn.value = text; analyseText(); },
+        focus() { textIn.focus(); },
+      };
+    },
+  });
+
+  function formatSize(n) {
+    if (n < 1024) return `${n} B`;
+    if (n < 1048576) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / 1048576).toFixed(1)} MB`;
+  }
+})();
+</script>
+<script>
+/*
+ * Case Notes module: collect indicators, verdicts, a timeline and notes during
+ * an investigation, and export a report (Markdown, HTML or JSON).
+ *
+ * Nothing is stored unless the analyst ticks "Keep in this browser". Then the
+ * case lives in this browser's local storage only (never sent anywhere).
+ */
+(function () {
+  'use strict';
+
+  const CR = window.OAT.casereport;
+  const I = window.OAT.ioc;
+  const STORE_KEY = 'oat.case.v1';
+
+  const storage = {
+    load() { try { const v = localStorage.getItem(STORE_KEY); return v ? CR.fromJson(v) : null; } catch (_) { return null; } },
+    save(c) { try { localStorage.setItem(STORE_KEY, CR.toJson(c)); return true; } catch (_) { return false; } },
+    clear() { try { localStorage.removeItem(STORE_KEY); } catch (_) { /* nothing stored */ } },
+  };
+
+  window.OAT.register({
+    id: 'case',
+    name: 'Case Notes',
+    summary: 'Collect indicators with verdicts, a timeline and notes during an investigation, then export a report. Kept only in this page unless you choose to save it in this browser.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+      const saved = storage.load();
+      let c = saved || CR.emptyCase();
+
+      // ---------------------------------------------------------- Header fields
+
+      const field = (label, key, attrs = {}) => {
+        const el = h('input', { type: 'text', class: 'input', value: c[key], 'aria-label': label, ...attrs });
+        el.addEventListener('input', () => { c[key] = el.value; changed(); });
+        return { el, wrap: h('label', { class: 'field' }, h('span', { class: 'meta' }, label), el), key };
+      };
+      const fTitle = field('Case title', 'title', { placeholder: 'e.g. Phishing wave targeting finance' });
+      const fTicket = field('Ticket / incident ID', 'ticket');
+      const fAnalyst = field('Analyst', 'analyst');
+
+      const keepBox = h('input', { type: 'checkbox', checked: Boolean(saved) });
+      const keepNote = h('span', { class: 'meta' });
+
+      // ---------------------------------------------------------- IOCs
+
+      const iocIn = ui.textarea('Paste indicators or any text containing them (defanged is fine), then Add', 'Indicators to add', { rows: '3' });
+      const iocTable = h('div');
+
+      // ---------------------------------------------------------- Timeline
+
+      const tlTime = h('input', { type: 'datetime-local', class: 'input narrow-time', 'aria-label': 'Event time', step: '1' });
+      const tlText = h('input', { type: 'text', class: 'input', placeholder: 'What happened, e.g. "User clicked the link"', 'aria-label': 'Event' });
+      const tlList = h('div');
+
+      // ---------------------------------------------------------- Notes
+
+      const notes = ui.textarea('Free notes: hypotheses, findings, next steps…', 'Notes', { rows: '6' });
+      notes.value = c.notes;
+
+      const defangBox = h('input', { type: 'checkbox', checked: true });
+      const importInput = h('input', { type: 'file', accept: '.json,application/json', hidden: true });
+
+      root.append(
+        ui.panel('Case', [h('label', { class: 'check' }, keepBox, 'Keep in this browser'), keepNote],
+          h('div', { class: 'grid-3' }, fTitle.wrap, fTicket.wrap, fAnalyst.wrap)),
+        ui.panel('Indicators', [ui.button('Add', addIocs), ui.button('Send all to Lookup', () => ctx.sendTo('lookup', c.iocs.map((x) => x.value).join('\n')))], iocIn, iocTable),
+        ui.panel('Timeline', null, h('div', { class: 'row' }, tlTime, tlText, ui.button('Add event', addEvent)), tlList),
+        ui.panel('Notes', null, notes),
+        ui.panel('Report', [h('label', { class: 'check' }, defangBox, 'Defang indicators')],
+          h('div', { class: 'row' },
+            ui.button('Download Markdown', () => ctx.download(`${slug()}.md`, CR.toMarkdown(c, { defang: defangBox.checked }), 'text/markdown;charset=utf-8')),
+            ui.copyButton(() => CR.toMarkdown(c, { defang: defangBox.checked }), 'Copy Markdown'),
+            ui.button('Download HTML', () => ctx.download(`${slug()}.html`, CR.toHtml(c, { defang: defangBox.checked }), 'text/html;charset=utf-8')),
+            ui.button('Export JSON', () => ctx.download(`${slug()}.json`, CR.toJson(c), 'application/json')),
+            ui.button('Import JSON…', () => importInput.click()),
+            ui.button('New case', newCase)),
+          importInput,
+          h('p', { class: 'meta' }, 'Export JSON to keep a case or share it with a colleague; Import JSON to continue it later.')));
+
+      // ---------------------------------------------------------- Behaviour
+
+      function slug() {
+        return (c.title || 'case').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'case';
+      }
+
+      function changed() {
+        if (keepBox.checked) keepNote.textContent = storage.save(c) ? 'Saved' : 'Could not save (storage blocked)';
+      }
+
+      function addIocs() {
+        const n = CR.addIocsFromText(c, iocIn.value);
+        if (!iocIn.value.trim()) return;
+        ctx.toast(n ? `Added ${n} indicator${n === 1 ? '' : 's'}` : 'No new indicators found');
+        if (n) iocIn.value = '';
+        renderIocs();
+        changed();
+      }
+
+      function renderIocs() {
+        const labels = Object.fromEntries(I.TYPES.map((t) => [t.id, t.label]));
+        if (!c.iocs.length) { iocTable.replaceChildren(h('p', { class: 'meta' }, 'No indicators yet. Paste above, or use Send to… from another module.')); return; }
+        iocTable.replaceChildren(ui.table(['Type', 'Indicator', 'Verdict', 'Note', ''], c.iocs.map((x, i) => {
+          const verdict = h('select', { 'aria-label': `Verdict for ${x.value}`, class: `verdict-${x.verdict}` }, CR.VERDICTS.map((v) => h('option', { value: v }, v)));
+          verdict.value = x.verdict;
+          verdict.addEventListener('change', () => { x.verdict = verdict.value; verdict.className = `verdict-${x.verdict}`; changed(); });
+          const note = h('input', { type: 'text', class: 'input', value: x.note, 'aria-label': `Note for ${x.value}` });
+          note.addEventListener('input', () => { x.note = note.value; changed(); });
+          return [labels[x.type] || x.type, h('code', { class: 'ioc-value' }, x.value), verdict, note,
+            h('span', { class: 'row nowrap' }, ui.button('Look up', () => ctx.sendTo('lookup', x.value)),
+              ui.button('✕', () => { c.iocs.splice(i, 1); renderIocs(); changed(); }, { 'aria-label': `Remove ${x.value}` }))];
+        })));
+      }
+
+      function nowLocal() {
+        const d = new Date();
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        return d.toISOString().slice(0, 19);
+      }
+
+      function addEvent() {
+        const text = tlText.value.trim();
+        if (!text) { tlText.focus(); return; }
+        c.timeline.push({ time: tlTime.value || nowLocal(), text });
+        tlText.value = '';
+        tlTime.value = nowLocal();
+        renderTimeline();
+        changed();
+      }
+
+      function renderTimeline() {
+        const items = c.timeline.map((t, i) => ({ t, i })).sort((a, b) => (a.t.time < b.t.time ? -1 : a.t.time > b.t.time ? 1 : 0));
+        tlList.replaceChildren(items.length
+          ? ui.table(['Time (local)', 'Event', ''], items.map(({ t, i }) => [h('code', null, t.time.replace('T', ' ')), t.text,
+            ui.button('✕', () => { c.timeline.splice(i, 1); renderTimeline(); changed(); }, { 'aria-label': 'Remove event' })]))
+          : h('p', { class: 'meta' }, 'No events yet.'));
+      }
+
+      function renderAll() {
+        for (const f of [fTitle, fTicket, fAnalyst]) f.el.value = c[f.key];
+        notes.value = c.notes;
+        renderIocs();
+        renderTimeline();
+      }
+
+      function newCase() {
+        if ((c.iocs.length || c.timeline.length || c.notes) && !window.confirm('Start a new case? The current one is cleared (export it first if you need it).')) return;
+        c = CR.emptyCase();
+        changed();
+        renderAll();
+      }
+
+      keepBox.addEventListener('change', () => {
+        if (keepBox.checked) changed();
+        else { storage.clear(); keepNote.textContent = 'Removed from this browser'; }
+      });
+      notes.addEventListener('input', ui.debounce(() => { c.notes = notes.value; changed(); }, 300));
+      tlText.addEventListener('keydown', (e) => { if (e.key === 'Enter') addEvent(); });
+      importInput.addEventListener('change', async () => {
+        const file = importInput.files[0];
+        importInput.value = '';
+        if (!file) return;
+        try {
+          c = CR.fromJson(await file.text());
+          renderAll();
+          changed();
+          ctx.toast('Case imported');
+        } catch (e) {
+          ctx.toast(`Import failed: ${e.message}`);
+        }
+      });
+
+      tlTime.value = nowLocal();
+      if (saved) keepNote.textContent = 'Restored from this browser';
+      renderAll();
+
+      return {
+        // Indicators in the text are added; if there are none, the text becomes a note.
+        receive(text) {
+          const n = CR.addIocsFromText(c, text);
+          if (n) ctx.toast(`Added ${n} indicator${n === 1 ? '' : 's'} to the case`);
+          else {
+            c.notes = c.notes ? `${c.notes}\n\n${text}` : text;
+            notes.value = c.notes;
+            ctx.toast('Added to case notes');
+          }
+          renderIocs();
+          changed();
+        },
+        focus() { fTitle.el.focus(); },
       };
     },
   });

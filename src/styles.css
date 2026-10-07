@@ -393,6 +393,46 @@ code.hash.match { background: var(--ok-soft); color: var(--ok); outline: 1px sol
 .reading-zone { font-size: 14px; }
 .other-readings { display: grid; gap: 8px; }
 
+.module-group {
+  margin: 14px 10px 4px;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted);
+}
+.module-group:first-child { margin-top: 2px; }
+
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 14px; }
+.field { display: grid; gap: 2px; }
+.input.narrow { width: 80px; flex: none; }
+.input.narrow-time { width: auto; flex: 0 0 auto; }
+.panel-lite { margin: -4px 0 14px; padding: 0 4px; }
+.slash { color: var(--muted); font-size: 18px; }
+code.big-url { font-size: 15px; }
+mark { background: var(--warn-soft); color: inherit; border-radius: 2px; outline: 1px solid var(--warn); }
+mark.empty-match { outline-style: dashed; }
+
+/* Diff */
+table.diff { width: 100%; border-collapse: collapse; font: 13px/1.45 var(--mono); table-layout: fixed; }
+table.diff td { padding: 1px 6px; vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
+table.diff td.ln { width: 4.5em; color: var(--muted); text-align: right; user-select: none; border-right: 1px solid var(--border); }
+table.diff td.code.empty { background: var(--surface-2); }
+table.diff tr.row-delete td.code:nth-child(2), table.diff tr.row-change td.code:nth-child(2) { background: var(--error-soft); }
+table.diff tr.row-insert td.code:nth-child(4), table.diff tr.row-change td.code:nth-child(4) { background: var(--ok-soft); }
+table.diff tr.row-change td.code:nth-child(2) mark { background: var(--error); color: var(--bg); outline: 0; }
+table.diff tr.row-change td.code:nth-child(4) mark { background: var(--ok); color: var(--bg); outline: 0; }
+table.diff tr.skip td { text-align: center; color: var(--muted); background: var(--surface-2); font-family: var(--sans); }
+
+/* Entropy chart */
+.entropy-svg { width: 100%; height: 120px; display: block; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.entropy-svg .bar { fill: var(--info); }
+.entropy-svg .bar-hot { fill: var(--error); }
+.entropy-svg .threshold { stroke: var(--muted); stroke-width: 0.6; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+
+/* Case notes */
+select.verdict-malicious { color: var(--error); font-weight: 600; }
+select.verdict-suspicious { color: var(--warn); font-weight: 600; }
+select.verdict-benign { color: var(--ok); }
+
 /* Lookup */
 .links { gap: 6px; }
 a.btn { text-decoration: none; color: var(--text); display: inline-block; }

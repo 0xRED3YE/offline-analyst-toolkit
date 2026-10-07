@@ -221,15 +221,41 @@
     if (entry.api && typeof entry.api.focus === 'function') entry.api.focus();
   }
 
+  // Sidebar groups, in display order. Modules not listed go into a final "More" group.
+  const NAV_GROUPS = [
+    ['Decode & convert', ['encode', 'hash', 'time', 'jwt', 'ps']],
+    ['Indicators', ['ioc', 'defang', 'url', 'lookup', 'email']],
+    ['Analysis', ['diff', 'regex', 'entropy']],
+    ['Case', ['case']],
+  ];
+
+  function groupOf(id) {
+    const g = NAV_GROUPS.findIndex(([, ids]) => ids.includes(id));
+    return g < 0 ? NAV_GROUPS.length : g;
+  }
+
   function buildNav() {
+    // Order modules by group, then by their position in the group.
+    modules.sort((a, b) => groupOf(a.id) - groupOf(b.id) ||
+      (NAV_GROUPS[groupOf(a.id)] ? NAV_GROUPS[groupOf(a.id)][1].indexOf(a.id) - NAV_GROUPS[groupOf(b.id)][1].indexOf(b.id) : 0));
     const list = document.getElementById('module-list');
     const select = document.getElementById('module-select');
+    let currentGroup = -1;
+    let optgroup = null;
     modules.forEach((m, i) => {
+      const g = groupOf(m.id);
+      if (g !== currentGroup) {
+        currentGroup = g;
+        const label = NAV_GROUPS[g] ? NAV_GROUPS[g][0] : 'More';
+        list.append(h('li', { class: 'module-group', role: 'presentation' }, label));
+        optgroup = h('optgroup', { label });
+        select.append(optgroup);
+      }
       list.append(h('li', null,
         h('button', { type: 'button', class: 'module-link', dataset: { id: m.id }, onclick: () => show(m.id) },
           h('span', { class: 'module-key', 'aria-hidden': 'true' }, i < 9 ? String(i + 1) : ''),
           m.name)));
-      select.append(h('option', { value: m.id }, m.name));
+      optgroup.append(h('option', { value: m.id }, m.name));
     });
     select.addEventListener('change', () => show(select.value));
   }

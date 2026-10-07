@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.0 (2026-10-07)
+
+Six more modules, and a grouped sidebar (Decode & convert, Indicators, Analysis, Case).
+
+- **URL Analyzer:** unwraps SafeLinks, Proofpoint v1/v2/v3, Google, Facebook, Barracuda and generic/Base64 redirects; URL parts; flags look-alike punycode domains (with a "looks like" skeleton), obfuscated IP hosts, `user@host`, shorteners and risky file types.
+- **PowerShell Deobfuscator:** `-EncodedCommand` in any abbreviation, nested layers, `FromBase64String`/`GetString`, gzip/deflate payloads; undoes backticks, concatenation, `-f`, `[char]`, `.Replace()`/`-replace` and reversals; findings and IOCs.
+- **Text Diff:** Myers line diff, side by side with word-level marks, ignore whitespace/case, unified `.diff` export.
+- **Regex Tester:** highlighted matches, groups, replace, SOC presets; runs in a worker with a 2 s limit.
+- **Entropy / Strings:** entropy and block chart, ASCII/UTF-16 strings with "interesting" flags, per-line entropy for DGA hunting.
+- **Case Notes:** indicators with verdicts, timeline, notes; Markdown/HTML/JSON export and JSON import; optional local save.
+
+### Fixed
+- Timestamp Converter could show a stray "null" under the readings when a value had no less-likely readings.
+
 ## 1.0.0 (2026-10-07)
 
 First release: all 8 MVP modules.

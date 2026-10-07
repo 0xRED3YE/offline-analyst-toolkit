@@ -71,9 +71,9 @@
         const other = readings.map((r, i) => [r, i]).filter(([r]) => !r.likely);
         readingsBox.replaceChildren(
           ...likely.map(([r, i]) => card(r, i)),
-          other.length ? h('details', { class: 'other-readings', open: likely.length === 0 || other.some(([, i]) => i === selected) },
+          ...(other.length ? [h('details', { class: 'other-readings', open: likely.length === 0 || other.some(([, i]) => i === selected) },
             h('summary', null, `${other.length} less likely reading${other.length === 1 ? '' : 's'}`),
-            ...other.map(([r, i]) => card(r, i))) : null);
+            ...other.map(([r, i]) => card(r, i)))] : []));
 
         const ticks = readings[selected].ticks;
         convBox.replaceChildren(ui.table(['Format', 'Value', ''], [
