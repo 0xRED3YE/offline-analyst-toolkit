@@ -1,0 +1,3539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; worker-src blob:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Offline Analyst Toolkit</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23c0392b'/%3E%3Ccircle cx='8' cy='8' r='3' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* Offline Analyst Toolkit: styles. System fonts only (no network). */
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eef0f3;
+  --border: #d9dde3;
+  --text: #1b1f24;
+  --muted: #5f6b7a;
+  --accent: #c0392b;
+  --accent-text: #ffffff;
+  --accent-soft: #fbe9e7;
+  --ok: #1e7f4f;
+  --ok-soft: #e3f4ea;
+  --error: #b42318;
+  --error-soft: #fdecea;
+  --warn: #9a5b00;
+  --warn-soft: #fff4e0;
+  --info: #1d5fa8;
+  --info-soft: #e6f0fb;
+  --focus: #2563eb;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 8px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216;
+    --surface: #171b21;
+    --surface-2: #1f252d;
+    --border: #2d3540;
+    --text: #e6e9ee;
+    --muted: #9aa5b4;
+    --accent: #e5554a;
+    --accent-text: #ffffff;
+    --accent-soft: #3a1d1b;
+    --ok: #4cc38a;
+    --ok-soft: #15291f;
+    --error: #ff7b72;
+    --error-soft: #3a1a1a;
+    --warn: #f0b45a;
+    --warn-soft: #3a2a12;
+    --info: #7cb4f5;
+    --info-soft: #16263a;
+    --focus: #6ea8fe;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f1216;
+  --surface: #171b21;
+  --surface-2: #1f252d;
+  --border: #2d3540;
+  --text: #e6e9ee;
+  --muted: #9aa5b4;
+  --accent: #e5554a;
+  --accent-text: #ffffff;
+  --accent-soft: #3a1d1b;
+  --ok: #4cc38a;
+  --ok-soft: #15291f;
+  --error: #ff7b72;
+  --error-soft: #3a1a1a;
+  --warn: #f0b45a;
+  --warn-soft: #3a2a12;
+  --info: #7cb4f5;
+  --info-soft: #16263a;
+  --focus: #6ea8fe;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 var(--sans);
+  min-height: 100vh;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+[hidden] { display: none !important; }
+
+.visually-hidden, .offscreen {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ Top bar */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-mark {
+  width: 18px; height: 18px; border-radius: 4px; flex: none;
+  background: var(--accent);
+  box-shadow: inset 0 0 0 5px var(--accent), inset 0 0 0 9px var(--accent-text);
+}
+.brand-name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand-by { color: var(--muted); font-size: 13px; }
+
+.topbar-right { display: flex; align-items: center; gap: 8px; flex: none; }
+
+.badge-offline {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: help;
+}
+.badge-offline .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+
+/* ------------------------------------------------------------ Layout */
+
+.layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: calc(100vh - 53px);
+}
+
+.sidebar {
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  padding: 12px 8px;
+}
+
+.module-list { list-style: none; margin: 0; padding: 0; }
+
+.module-link {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.module-link:hover { background: var(--surface-2); }
+.module-link[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.module-key {
+  width: 18px; font: 12px var(--mono); color: var(--muted); text-align: center;
+}
+
+.sidebar-hint { color: var(--muted); font-size: 12px; padding: 0 10px; margin-top: 16px; }
+
+.module-select-wrap { display: none; }
+
+.main { padding: 20px 24px 48px; min-width: 0; }
+
+.module-head h1 { font-size: 22px; margin: 0 0 2px; }
+.module-summary { margin: 0 0 16px; color: var(--muted); }
+
+/* ------------------------------------------------------------ Shared controls */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.panel-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.panel-title { font-weight: 600; margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.btn {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) { background: var(--surface-2); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.btn-primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+.btn-ghost { border-color: transparent; background: transparent; }
+.btn-small { padding: 2px 8px; font-size: 13px; }
+
+select {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+textarea.io, pre.output {
+  width: 100%;
+  min-height: 160px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font: 13px/1.45 var(--mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+textarea.io { resize: vertical; }
+textarea.io.dragover { border-color: var(--accent); background: var(--accent-soft); }
+pre.output { overflow: auto; max-height: 60vh; }
+pre.output.hexview { white-space: pre; word-break: normal; overflow-wrap: normal; }
+pre.output:empty::before { content: attr(data-empty); color: var(--muted); }
+
+.meta { color: var(--muted); font-size: 13px; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 4px 2px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 3px 10px; cursor: pointer; font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--surface-2); font-weight: 600; }
+
+.error { color: var(--error); }
+.notice { background: var(--error-soft); color: var(--error); padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+
+/* ------------------------------------------------------------ Encode / Decode */
+
+.steps { list-style: none; margin: 0 0 8px; padding: 0; counter-reset: step; }
+.step {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.step:last-child { border-bottom: 0; }
+.step::before {
+  counter-increment: step;
+  content: counter(step);
+  width: 22px; height: 22px; border-radius: 50%;
+  display: inline-grid; place-items: center;
+  background: var(--surface-2); font-size: 12px; font-weight: 600;
+}
+.step select { flex: 1 1 140px; max-width: 260px; min-width: 0; }
+.step-status { font-size: 13px; color: var(--muted); flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step-status.ok { color: var(--ok); }
+.step-status.err { color: var(--error); white-space: normal; }
+.steps-empty { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+
+.suggestions { display: grid; gap: 6px; }
+.suggestion {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center;
+  text-align: left;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.suggestion:hover { border-color: var(--accent); }
+.suggestion-label { font-weight: 600; font-size: 14px; }
+.suggestion-score { font-size: 12px; color: var(--muted); }
+.suggestion-preview { grid-column: 1 / -1; font: 12px var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ------------------------------------------------------------ Shared pieces for modules */
+
+.options { margin-top: 8px; gap: 6px 16px; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
+.check input { margin: 0; accent-color: var(--accent); }
+.sep { width: 1px; height: 18px; background: var(--border); }
+.actions { margin-top: 8px; }
+.nowrap { flex-wrap: nowrap; }
+.mono { font-family: var(--mono); }
+
+.input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+.input.big { font-size: 16px; padding: 10px 12px; }
+.row > .input { flex: 1 1 220px; width: auto; }
+
+.meta.ok { color: var(--ok); font-weight: 600; }
+.meta.err { color: var(--error); font-weight: 600; }
+
+.notice-warn { background: var(--warn-soft); color: var(--warn); margin: 8px 0 0; }
+
+.table-wrap { overflow-x: auto; }
+table.data { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.data th {
+  text-align: left; font-weight: 600; color: var(--muted); font-size: 12px;
+  text-transform: uppercase; letter-spacing: .04em;
+  padding: 6px 8px; border-bottom: 1px solid var(--border);
+}
+table.data td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+table.data tr:last-child td { border-bottom: 0; }
+table.data code, .kv code, code.ioc-value { font: 13px var(--mono); overflow-wrap: anywhere; word-break: break-all; }
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  margin-left: 6px;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .03em;
+  white-space: nowrap;
+  background: var(--surface-2); color: var(--muted);
+}
+.badge:first-child { margin-left: 0; }
+.badge-high { background: var(--error-soft); color: var(--error); }
+.badge-medium { background: var(--warn-soft); color: var(--warn); }
+.badge-low { background: var(--info-soft); color: var(--info); }
+.badge-pass { background: var(--ok-soft); color: var(--ok); }
+
+.findings { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.findings li { display: flex; gap: 10px; align-items: baseline; }
+.findings .badge { flex: none; min-width: 64px; text-align: center; }
+
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 14px; }
+pre.output.json { min-height: 80px; }
+
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; }
+.kv dt { color: var(--muted); font-size: 14px; }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+
+details summary { cursor: pointer; color: var(--muted); margin: 4px 0; }
+
+.type-filters { margin-bottom: 10px; gap: 6px; }
+.chip-check { padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; }
+
+/* Hashing */
+.dropzone {
+  padding: 22px 16px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--muted);
+  cursor: pointer;
+}
+.dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.file-jobs { display: grid; gap: 12px; margin-top: 12px; }
+.file-job { border-top: 1px solid var(--border); padding-top: 10px; }
+.file-job-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin-bottom: 6px; overflow-wrap: anywhere; }
+progress { flex: 1 1 200px; height: 10px; accent-color: var(--accent); }
+code.hash { padding: 1px 3px; border-radius: 4px; }
+code.hash.match { background: var(--ok-soft); color: var(--ok); outline: 1px solid var(--ok); }
+
+/* Timestamps */
+.readings { display: grid; gap: 8px; }
+.reading {
+  display: grid; gap: 2px;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.reading[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.reading-label { font-size: 13px; color: var(--muted); }
+.reading-utc { font-size: 16px; font-weight: 600; }
+.reading-zone { font-size: 14px; }
+.other-readings { display: grid; gap: 8px; }
+
+/* Lookup */
+.links { gap: 6px; }
+a.btn { text-decoration: none; color: var(--text); display: inline-block; }
+
+/* ------------------------------------------------------------ Toast */
+
+.toast {
+  position: fixed; left: 50%; bottom: 20px;
+  transform: translate(-50%, 20px);
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: var(--text); color: var(--bg);
+  font-size: 14px;
+  opacity: 0; pointer-events: none;
+  transition: opacity .15s, transform .15s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ------------------------------------------------------------ Phone width */
+
+@media (max-width: 760px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { display: none; }
+  .module-select-wrap { display: block; padding: 12px 16px 0; }
+  .module-select { width: 100%; }
+  .main { padding: 14px 16px 40px; }
+  .brand-by { display: none; }
+  #theme-toggle { padding: 5px 8px; }
+}
+
+@media (max-width: 420px) {
+  .badge-offline { font-size: 0; padding: 6px; gap: 0; }
+  .badge-offline .dot { width: 10px; height: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { transition: none; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">Offline Analyst Toolkit</span>
+    <span class="brand-by">0xRED3YE</span>
+  </div>
+  <div class="topbar-right">
+    <span class="badge-offline" title="This page cannot make network requests: its Content-Security-Policy sets connect-src 'none'. Nothing you paste or drop leaves this browser.">
+      <span class="dot" aria-hidden="true"></span>100% offline
+    </span>
+    <button type="button" id="theme-toggle" class="btn btn-ghost" aria-label="Toggle light or dark theme">Theme</button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar" aria-label="Modules">
+    <ul id="module-list" class="module-list"></ul>
+    <p class="sidebar-hint">Alt+1…9 switches module</p>
+  </nav>
+  <label class="module-select-wrap">
+    <span class="visually-hidden">Module</span>
+    <select id="module-select" class="module-select"></select>
+  </label>
+  <main id="main" class="main"></main>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- build.js inlines these in order -->
+<script>
+/*
+ * app.js: the shell. Modules call OAT.register({ id, name, summary, render }) and
+ * the shell builds navigation, mounts modules lazily, and gives each one a small
+ * context: DOM helper, copy, download, toast and Send to….
+ *
+ * Rule for every module: untrusted data is written with textContent (h() does
+ * this for strings), never innerHTML.
+ */
+(function () {
+  'use strict';
+
+  const OAT = (window.OAT = window.OAT || {});
+  const modules = [];
+  const mounted = new Map();   // id -> { section, api }
+  let activeId = null;
+
+  OAT.register = function (mod) {
+    if (!mod || !mod.id || typeof mod.render !== 'function') throw new Error('Invalid module definition');
+    modules.push(mod);
+  };
+
+  // ------------------------------------------------------------- DOM helper
+
+  // h('div', { class: 'x', onclick: fn }, 'text', childNode, [more])
+  // Strings become text nodes. Event handlers must be functions: string "on*"
+  // attributes are refused so untrusted text can never become inline script.
+  function h(tag, attrs, ...children) {
+    const el = document.createElement(tag);
+    if (attrs) {
+      for (const [k, v] of Object.entries(attrs)) {
+        if (v == null || v === false) continue;
+        if (k.startsWith('on')) {
+          if (typeof v === 'function') el.addEventListener(k.slice(2), v);
+          continue;
+        }
+        if (k === 'class') el.className = v;
+        else if (k === 'dataset') Object.assign(el.dataset, v);
+        else if (k === 'value') el.value = v;
+        else if (v === true) el.setAttribute(k, '');
+        else el.setAttribute(k, String(v));
+      }
+    }
+    for (const c of children.flat(Infinity)) {
+      if (c == null || c === false) continue;
+      el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    }
+    return el;
+  }
+
+  // ------------------------------------------------------------- Services for modules
+
+  let toastTimer = null;
+  function toast(message) {
+    const el = document.getElementById('toast');
+    el.textContent = message;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  }
+
+  async function copy(textValue) {
+    try {
+      await navigator.clipboard.writeText(textValue);
+      toast('Copied');
+      return;
+    } catch (_) { /* fall back below: clipboard API can be unavailable on file:// */ }
+    const ta = h('textarea', { class: 'offscreen', readonly: true, 'aria-hidden': 'true' });
+    ta.value = textValue;
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+    ta.remove();
+    toast(ok ? 'Copied' : 'Copy failed: select the output and press Ctrl+C');
+  }
+
+  function download(filename, data, type = 'application/octet-stream') {
+    const blob = data instanceof Blob ? data : new Blob([data], { type });
+    const url = URL.createObjectURL(blob);
+    const a = h('a', { href: url, download: filename });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  // Modules that can receive data from another module's output.
+  function sendTargets(fromId) {
+    return modules.filter((m) => m.id !== fromId && m.acceptsInput !== false).map((m) => ({ id: m.id, name: m.name }));
+  }
+
+  function sendTo(targetId, textValue) {
+    show(targetId);
+    const entry = mounted.get(targetId);
+    if (entry && entry.api && typeof entry.api.receive === 'function') {
+      entry.api.receive(textValue);
+      toast(`Sent to ${modules.find((m) => m.id === targetId).name}`);
+    }
+  }
+
+  // ------------------------------------------------------------- Shared UI pieces
+
+  function makeUi(mod) {
+    return {
+      // <div class="panel"> with a title row; extras go on the right of the title.
+      panel(title, extras, ...children) {
+        return h('div', { class: 'panel' },
+          h('div', { class: 'panel-head' }, h('h2', { class: 'panel-title' }, title), extras ? h('div', { class: 'row' }, extras) : null),
+          ...children);
+      },
+
+      button(label, onclick, attrs = {}) {
+        return h('button', { type: 'button', class: 'btn btn-small', ...attrs, onclick }, label);
+      },
+
+      copyButton(getText, label = 'Copy') {
+        return h('button', { type: 'button', class: 'btn btn-small', onclick: () => copy(getText()) }, label);
+      },
+
+      // "Send to…" dropdown that pipes getText() into another module.
+      sendSelect(getText) {
+        const targets = sendTargets(mod.id);
+        const sel = h('select', { 'aria-label': 'Send to another module' },
+          h('option', { value: '' }, 'Send to…'),
+          targets.map((t) => h('option', { value: t.id }, t.name)));
+        sel.addEventListener('change', () => {
+          const id = sel.value;
+          sel.value = '';
+          if (!id) return;
+          const text = getText();
+          if (!text) { toast('Nothing to send yet'); return; }
+          sendTo(id, text);
+        });
+        return sel;
+      },
+
+      textarea(placeholder, label, attrs = {}) {
+        return h('textarea', { class: 'io', spellcheck: 'false', autocomplete: 'off', placeholder, 'aria-label': label, ...attrs });
+      },
+
+      // Findings as a list with severity badges: [{ level, text }].
+      findings(list) {
+        if (!list.length) return h('p', { class: 'meta' }, 'Nothing notable found.');
+        return h('ul', { class: 'findings' }, list.map((f) =>
+          h('li', null, h('span', { class: `badge badge-${f.level}` }, f.level), h('span', null, f.text))));
+      },
+
+      // Simple data table. cells may be strings or nodes.
+      table(columns, rows, attrs = {}) {
+        return h('div', { class: 'table-wrap' },
+          h('table', { class: 'data', ...attrs },
+            h('thead', null, h('tr', null, columns.map((c) => h('th', { scope: 'col' }, c)))),
+            h('tbody', null, rows.map((r) => h('tr', null, r.map((c) => h('td', null, c)))))));
+      },
+
+      // Read a dropped or chosen file as text, with a size guard.
+      async readTextFile(file, maxBytes = 20 * 1024 * 1024) {
+        if (file.size > maxBytes) { toast(`File is over ${Math.round(maxBytes / 1048576)} MB`); return null; }
+        return file.text();
+      },
+
+      // Wire drag-and-drop of a file onto an element.
+      onFileDrop(el, handler) {
+        el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('dragover'); });
+        el.addEventListener('dragleave', () => el.classList.remove('dragover'));
+        el.addEventListener('drop', (e) => {
+          e.preventDefault();
+          el.classList.remove('dragover');
+          const files = e.dataTransfer ? [...e.dataTransfer.files] : [];
+          if (files.length) handler(files);
+        });
+      },
+
+      debounce(fn, ms = 150) {
+        let t = null;
+        return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+      },
+    };
+  }
+
+  function contextFor(mod) {
+    return { h, toast, copy, download, sendTo, sendTargets: () => sendTargets(mod.id), ui: makeUi(mod) };
+  }
+
+  // ------------------------------------------------------------- Navigation
+
+  function mount(mod) {
+    let entry = mounted.get(mod.id);
+    if (entry) return entry;
+    const section = h('section', { class: 'module', id: `mod-${mod.id}`, 'aria-labelledby': `mod-${mod.id}-title` },
+      h('header', { class: 'module-head' },
+        h('h1', { id: `mod-${mod.id}-title` }, mod.name),
+        mod.summary ? h('p', { class: 'module-summary' }, mod.summary) : null));
+    const body = h('div', { class: 'module-body' });
+    section.append(body);
+    document.getElementById('main').append(section);
+    let api = null;
+    try {
+      api = mod.render(body, contextFor(mod)) || null;
+    } catch (e) {
+      body.append(h('p', { class: 'error' }, `This module failed to load: ${e.message}`));
+      console.error(e);
+    }
+    entry = { section, api };
+    mounted.set(mod.id, entry);
+    return entry;
+  }
+
+  function show(id) {
+    const mod = modules.find((m) => m.id === id) || modules[0];
+    if (!mod) return;
+    const entry = mount(mod);
+    for (const [mid, e] of mounted) e.section.hidden = mid !== mod.id;
+    activeId = mod.id;
+    for (const btn of document.querySelectorAll('#module-list button')) {
+      btn.setAttribute('aria-current', btn.dataset.id === mod.id ? 'page' : 'false');
+    }
+    document.getElementById('module-select').value = mod.id;
+    document.title = `${mod.name} · Offline Analyst Toolkit`;
+    if (location.hash !== `#${mod.id}`) history.replaceState(null, '', `#${mod.id}`);
+    if (entry.api && typeof entry.api.focus === 'function') entry.api.focus();
+  }
+
+  function buildNav() {
+    const list = document.getElementById('module-list');
+    const select = document.getElementById('module-select');
+    modules.forEach((m, i) => {
+      list.append(h('li', null,
+        h('button', { type: 'button', class: 'module-link', dataset: { id: m.id }, onclick: () => show(m.id) },
+          h('span', { class: 'module-key', 'aria-hidden': 'true' }, i < 9 ? String(i + 1) : ''),
+          m.name)));
+      select.append(h('option', { value: m.id }, m.name));
+    });
+    select.addEventListener('change', () => show(select.value));
+  }
+
+  // ------------------------------------------------------------- Theme
+
+  function initTheme() {
+    const btn = document.getElementById('theme-toggle');
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const current = () => document.documentElement.dataset.theme || (media.matches ? 'dark' : 'light');
+    const label = () => { btn.textContent = current() === 'dark' ? 'Light mode' : 'Dark mode'; };
+    btn.addEventListener('click', () => {
+      document.documentElement.dataset.theme = current() === 'dark' ? 'light' : 'dark';
+      label();
+    });
+    media.addEventListener('change', label);
+    label();
+  }
+
+  // ------------------------------------------------------------- Keyboard
+
+  function initKeys() {
+    document.addEventListener('keydown', (e) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[1-9]$/.test(e.code)) {
+        const mod = modules[Number(e.code.slice(5)) - 1];
+        if (mod) { e.preventDefault(); show(mod.id); }
+      }
+    });
+  }
+
+  // Inline module scripts have all run by the time DOMContentLoaded fires.
+  document.addEventListener('DOMContentLoaded', () => {
+    buildNav();
+    initTheme();
+    initKeys();
+    show(location.hash.slice(1));
+    window.addEventListener('hashchange', () => {
+      const id = location.hash.slice(1);
+      if (id && id !== activeId) show(id);
+    });
+  });
+
+  OAT.h = h;
+})();
+</script>
+<script>
+/*
+ * codecs.js: pure encode/decode functions used by the Encode / Decode module.
+ *
+ * Everything works on bytes (Uint8Array) so steps can be chained without losing
+ * binary data. Text-level operations (HTML entities, ROT13, ...) decode bytes as
+ * UTF-8, transform, and re-encode. No DOM access here, so the same file runs in
+ * the browser and under Node for the unit tests.
+ */
+(function (root, factory) {
+  const lib = factory();
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).codecs = lib;
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder('utf-8');                  // lossy: bad bytes become U+FFFD
+  const strictDecoder = new TextDecoder('utf-8', { fatal: true });
+
+  const utf8 = (str) => encoder.encode(str);
+  const text = (bytes) => decoder.decode(bytes);
+
+  function concat(chunks) {
+    let len = 0;
+    for (const c of chunks) len += c.length;
+    const out = new Uint8Array(len);
+    let pos = 0;
+    for (const c of chunks) { out.set(c, pos); pos += c.length; }
+    return out;
+  }
+
+  // Collects bytes from mixed sources (single bytes, code points) during parsing.
+  class ByteBuilder {
+    constructor() { this.parts = []; this.cur = []; }
+    byte(b) { this.cur.push(b); }
+    str(s) { if (s) { this.flush(); this.parts.push(utf8(s)); } }
+    flush() { if (this.cur.length) { this.parts.push(Uint8Array.from(this.cur)); this.cur = []; } }
+    done() { this.flush(); return concat(this.parts); }
+  }
+
+  // ---------------------------------------------------------------- Base64 (RFC 4648)
+
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const B64_LOOKUP = new Int16Array(128).fill(-1);
+  for (let i = 0; i < 64; i++) {
+    B64_LOOKUP[B64.charCodeAt(i)] = i;
+    B64_LOOKUP[B64URL.charCodeAt(i)] = i;   // accept both alphabets when decoding
+  }
+
+  function base64Encode(bytes, { urlSafe = false, pad = !urlSafe } = {}) {
+    const abc = urlSafe ? B64URL : B64;
+    let out = '';
+    let i = 0;
+    for (; i + 2 < bytes.length; i += 3) {
+      const n = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+      out += abc[n >> 18] + abc[(n >> 12) & 63] + abc[(n >> 6) & 63] + abc[n & 63];
+    }
+    const rest = bytes.length - i;
+    if (rest === 1) {
+      const n = bytes[i] << 16;
+      out += abc[n >> 18] + abc[(n >> 12) & 63] + (pad ? '==' : '');
+    } else if (rest === 2) {
+      const n = (bytes[i] << 16) | (bytes[i + 1] << 8);
+      out += abc[n >> 18] + abc[(n >> 12) & 63] + abc[(n >> 6) & 63] + (pad ? '=' : '');
+    }
+    return out;
+  }
+
+  // Tolerant decoder: ignores whitespace, accepts standard and URL-safe alphabets,
+  // and missing padding. Throws on characters outside the alphabet.
+  function base64Decode(str) {
+    const s = str.replace(/\s+/g, '').replace(/=+$/, '');
+    const out = new Uint8Array(Math.floor((s.length * 3) / 4));
+    let buf = 0, bits = 0, o = 0;
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      const v = c < 128 ? B64_LOOKUP[c] : -1;
+      if (v < 0) throw new Error(`Invalid Base64 character "${s[i]}" at position ${i + 1}`);
+      buf = (buf << 6) | v;
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        out[o++] = (buf >> bits) & 0xff;
+      }
+    }
+    // Checked after the character scan so a bad character gets the more useful error.
+    if (s.length % 4 === 1) throw new Error('Invalid Base64: length is not possible for Base64 data');
+    return out.subarray(0, o);
+  }
+
+  // ---------------------------------------------------------------- Hex
+
+  function hexEncode(bytes, sep = '') {
+    const parts = new Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) parts[i] = bytes[i].toString(16).padStart(2, '0');
+    return parts.join(sep);
+  }
+
+  // Accepts "48 65", "48:65", "0x48,0x65", "\x48\x65", "4865".
+  function hexDecode(str) {
+    const s = str.replace(/0x|\\x/gi, '').replace(/[\s:,;-]+/g, '');
+    const bad = s.search(/[^0-9a-f]/i);
+    if (bad >= 0) throw new Error(`Invalid hex character "${s[bad]}"`);
+    if (s.length % 2) throw new Error('Invalid hex: odd number of digits');
+    const out = new Uint8Array(s.length / 2);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(s.substr(i * 2, 2), 16);
+    return out;
+  }
+
+  // ---------------------------------------------------------------- URL (percent) encoding
+
+  function isUnreserved(b) {
+    return (b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5a) || (b >= 0x61 && b <= 0x7a) ||
+      b === 0x2d || b === 0x2e || b === 0x5f || b === 0x7e;   // - . _ ~
+  }
+
+  function urlEncode(bytes) {
+    let out = '';
+    for (const b of bytes) {
+      out += isUnreserved(b) ? String.fromCharCode(b) : '%' + b.toString(16).toUpperCase().padStart(2, '0');
+    }
+    return out;
+  }
+
+  // Byte-level and tolerant: a stray "%" or "%zz" is kept as-is instead of throwing
+  // (decodeURIComponent would throw), and "+" is left alone.
+  function urlDecode(bytes) {
+    const out = [];
+    for (let i = 0; i < bytes.length; i++) {
+      const b = bytes[i];
+      if (b === 0x25 && isHexByte(bytes[i + 1]) && isHexByte(bytes[i + 2])) {
+        out.push(parseInt(String.fromCharCode(bytes[i + 1], bytes[i + 2]), 16));
+        i += 2;
+      } else {
+        out.push(b);
+      }
+    }
+    return Uint8Array.from(out);
+  }
+
+  function isHexByte(b) {
+    return b !== undefined && ((b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x46) || (b >= 0x61 && b <= 0x66));
+  }
+
+  // ---------------------------------------------------------------- HTML entities
+
+  // Common named entities, plus the punctuation ones seen in obfuscated payloads
+  // (e.g. "javascript&colon;alert&lpar;1&rpar;").
+  const NAMED = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+    copy: '©', reg: '®', trade: '™', hellip: '…', mdash: '—', ndash: '–',
+    lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', laquo: '«', raquo: '»',
+    euro: '€', pound: '£', yen: '¥', cent: '¢', sect: '§', deg: '°',
+    times: '×', divide: '÷', middot: '·', bull: '•',
+    Tab: '\t', NewLine: '\n', colon: ':', semi: ';', lpar: '(', rpar: ')',
+    sol: '/', bsol: '\\', period: '.', comma: ',', excl: '!', quest: '?',
+    num: '#', percnt: '%', equals: '=', plus: '+', lowbar: '_', grave: '`',
+    lbrack: '[', rbrack: ']', lsqb: '[', rsqb: ']', lcub: '{', rcub: '}',
+    lbrace: '{', rbrace: '}', verbar: '|', vert: '|', ast: '*', dollar: '$',
+    commat: '@', Hat: '^', hyphen: '-', dash: '-',
+  };
+
+  function codePointToString(cp) {
+    if (!Number.isFinite(cp) || cp < 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) return '�';
+    return String.fromCodePoint(cp);
+  }
+
+  function htmlEncode(str) {
+    return str.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // Numeric entities may omit the ";" (browsers accept "&#106avascript"), named ones may not.
+  function htmlDecode(str) {
+    return str.replace(/&#x([0-9a-f]+);?|&#(\d+);?|&([a-zA-Z][a-zA-Z0-9]*);/gi, (m, hex, dec, name) => {
+      if (hex) return codePointToString(parseInt(hex, 16));
+      if (dec) return codePointToString(parseInt(dec, 10));
+      return Object.prototype.hasOwnProperty.call(NAMED, name) ? NAMED[name] : m;
+    });
+  }
+
+  // ---------------------------------------------------------------- ROT13
+
+  function rot13(bytes) {
+    const out = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) {
+      const b = bytes[i];
+      if (b >= 0x41 && b <= 0x5a) out[i] = ((b - 0x41 + 13) % 26) + 0x41;
+      else if (b >= 0x61 && b <= 0x7a) out[i] = ((b - 0x61 + 13) % 26) + 0x61;
+      else out[i] = b;
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- Binary
+
+  function binaryEncode(bytes) {
+    return Array.from(bytes, (b) => b.toString(2).padStart(8, '0')).join(' ');
+  }
+
+  function binaryDecode(str) {
+    const s = str.replace(/[\s,]+/g, '');
+    const bad = s.search(/[^01]/);
+    if (bad >= 0) throw new Error(`Invalid binary character "${s[bad]}"`);
+    if (s.length % 8) throw new Error('Invalid binary: bit count is not a multiple of 8');
+    const out = new Uint8Array(s.length / 8);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(s.substr(i * 8, 8), 2);
+    return out;
+  }
+
+  // ---------------------------------------------------------------- Unicode escapes
+
+  // Printable ASCII stays as-is; everything else becomes \uXXXX (surrogate pairs for
+  // characters above U+FFFF, which is how JavaScript and JSON write them).
+  function unicodeEscape(str) {
+    let out = '';
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      if (c >= 0x20 && c < 0x7f && c !== 0x5c) out += str[i];
+      else out += '\\u' + c.toString(16).padStart(4, '0');
+    }
+    return out;
+  }
+
+  const SIMPLE_ESCAPES = { n: '\n', r: '\r', t: '\t', 0: '\0', b: '\b', f: '\f', v: '\v', '\\': '\\', "'": "'", '"': '"', '/': '/' };
+
+  // \uXXXX and \u{...} and \UXXXXXXXX are code points; \xXX is a raw byte, because in
+  // payloads "\xc3\xa9" usually means UTF-8 bytes, not two Latin-1 characters.
+  function unicodeUnescape(str) {
+    const bb = new ByteBuilder();
+    // Case-sensitive on purpose: \U (8 digits) and \u (4 digits) are different escapes.
+    const re = /\\u\{([0-9a-fA-F]{1,6})\}|\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})|\\x([0-9a-fA-F]{2})|\\([nrt0bfv\\'"\/])/g;
+    let last = 0;
+    let pendingHigh = null;
+    let m;
+    const flushHigh = () => { if (pendingHigh !== null) { bb.str('�'); pendingHigh = null; } };
+    while ((m = re.exec(str))) {
+      if (m.index > last) { flushHigh(); bb.str(str.slice(last, m.index)); }
+      last = re.lastIndex;
+      if (m[4]) { flushHigh(); bb.byte(parseInt(m[4], 16)); continue; }
+      if (m[5]) { flushHigh(); bb.str(SIMPLE_ESCAPES[m[5]]); continue; }
+      const cp = parseInt(m[1] || m[2] || m[3], 16);
+      if (m[2] && cp >= 0xd800 && cp <= 0xdbff) { flushHigh(); pendingHigh = cp; continue; }
+      if (m[2] && cp >= 0xdc00 && cp <= 0xdfff && pendingHigh !== null) {
+        bb.str(String.fromCodePoint(0x10000 + ((pendingHigh - 0xd800) << 10) + (cp - 0xdc00)));
+        pendingHigh = null;
+        continue;
+      }
+      flushHigh();
+      bb.str(codePointToString(cp));
+    }
+    flushHigh();
+    bb.str(str.slice(last));
+    return bb.done();
+  }
+
+  // ---------------------------------------------------------------- UTF-16LE (PowerShell -EncodedCommand)
+
+  function utf16leDecode(bytes) {
+    if (bytes.length % 2) throw new Error('UTF-16LE needs an even number of bytes');
+    return utf8(new TextDecoder('utf-16le').decode(bytes));
+  }
+
+  function utf16leEncode(str) {
+    const out = new Uint8Array(str.length * 2);
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      out[i * 2] = c & 0xff;
+      out[i * 2 + 1] = c >> 8;
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- Operations and recipes
+
+  const OPS = [
+    { id: 'b64-decode', label: 'Base64 decode', group: 'Decode', run: (b) => base64Decode(text(b)) },
+    { id: 'hex-decode', label: 'Hex decode', group: 'Decode', run: (b) => hexDecode(text(b)) },
+    { id: 'url-decode', label: 'URL decode', group: 'Decode', run: urlDecode },
+    { id: 'html-decode', label: 'HTML entities decode', group: 'Decode', run: (b) => utf8(htmlDecode(text(b))) },
+    { id: 'unicode-unescape', label: 'Unicode unescape (\\u, \\x)', group: 'Decode', run: (b) => unicodeUnescape(text(b)) },
+    { id: 'binary-decode', label: 'Binary decode', group: 'Decode', run: (b) => binaryDecode(text(b)) },
+    { id: 'utf16le-decode', label: 'UTF-16LE to text', group: 'Decode', run: utf16leDecode },
+    { id: 'b64-encode', label: 'Base64 encode', group: 'Encode', run: (b) => utf8(base64Encode(b)) },
+    { id: 'b64url-encode', label: 'Base64 encode (URL-safe)', group: 'Encode', run: (b) => utf8(base64Encode(b, { urlSafe: true })) },
+    { id: 'hex-encode', label: 'Hex encode', group: 'Encode', run: (b) => utf8(hexEncode(b)) },
+    { id: 'url-encode', label: 'URL encode', group: 'Encode', run: (b) => utf8(urlEncode(b)) },
+    { id: 'html-encode', label: 'HTML entities encode', group: 'Encode', run: (b) => utf8(htmlEncode(text(b))) },
+    { id: 'unicode-escape', label: 'Unicode escape (\\u)', group: 'Encode', run: (b) => utf8(unicodeEscape(text(b))) },
+    { id: 'binary-encode', label: 'Binary encode', group: 'Encode', run: (b) => utf8(binaryEncode(b)) },
+    { id: 'utf16le-encode', label: 'Text to UTF-16LE', group: 'Encode', run: (b) => utf16leEncode(text(b)) },
+    { id: 'rot13', label: 'ROT13', group: 'Other', run: rot13 },
+  ];
+  const OP_BY_ID = Object.fromEntries(OPS.map((o) => [o.id, o]));
+
+  // Runs steps in order; stops at the first failing step.
+  // Returns [{ id, ok, bytes?, error? }] with one entry per step that ran.
+  function runRecipe(bytes, stepIds) {
+    const results = [];
+    let cur = bytes;
+    for (const id of stepIds) {
+      const op = OP_BY_ID[id];
+      if (!op) { results.push({ id, ok: false, error: `Unknown operation "${id}"` }); break; }
+      try {
+        cur = op.run(cur);
+        results.push({ id, ok: true, bytes: cur });
+      } catch (e) {
+        results.push({ id, ok: false, error: e.message });
+        break;
+      }
+    }
+    return results;
+  }
+
+  // ---------------------------------------------------------------- Analysis helpers
+
+  // Share of printable characters (0..1). Valid UTF-8 is judged per character,
+  // anything else per byte with a small penalty.
+  function printableRatio(bytes) {
+    if (!bytes.length) return 0;
+    let str;
+    try { str = strictDecoder.decode(bytes); } catch (_) {
+      let ok = 0;
+      for (const b of bytes) if ((b >= 0x20 && b < 0x7f) || b === 9 || b === 10 || b === 13) ok++;
+      return (ok / bytes.length) * 0.9;
+    }
+    let ok = 0, n = 0;
+    for (const ch of str) {
+      n++;
+      const c = ch.codePointAt(0);
+      if (c === 9 || c === 10 || c === 13 || (c >= 0x20 && c !== 0x7f && !(c >= 0x80 && c < 0xa0) && c !== 0xfffd)) ok++;
+    }
+    return n ? ok / n : 0;
+  }
+
+  const MAGIC = [
+    { sig: [0x1f, 0x8b], name: 'gzip data' },
+    { sig: [0x50, 0x4b, 0x03, 0x04], name: 'ZIP archive (also docx/xlsx/jar)' },
+    { sig: [0x4d, 0x5a], name: 'Windows executable (MZ)' },
+    { sig: [0x25, 0x50, 0x44, 0x46], name: 'PDF document' },
+    { sig: [0x89, 0x50, 0x4e, 0x47], name: 'PNG image' },
+    { sig: [0xff, 0xd8, 0xff], name: 'JPEG image' },
+    { sig: [0x7f, 0x45, 0x4c, 0x46], name: 'ELF executable' },
+    { sig: [0xd0, 0xcf, 0x11, 0xe0], name: 'OLE file (old Office document)' },
+    { sig: [0x78, 0x9c], name: 'zlib data' },
+  ];
+
+  function sniff(bytes) {
+    for (const m of MAGIC) {
+      if (bytes.length >= m.sig.length && m.sig.every((b, i) => bytes[i] === b)) return m.name;
+    }
+    return null;
+  }
+
+  // UTF-16LE text of mostly ASCII has a zero in every second byte.
+  function looksUtf16le(bytes) {
+    if (bytes.length < 4 || bytes.length % 2) return false;
+    let zeros = 0;
+    for (let i = 1; i < bytes.length; i += 2) if (bytes[i] === 0) zeros++;
+    return zeros / (bytes.length / 2) >= 0.8;
+  }
+
+  function preview(bytes, max = 80) {
+    const s = text(bytes.subarray(0, max * 4)).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f�]/g, '.').replace(/\s+/g, ' ');
+    return s.length > max ? s.slice(0, max) + '…' : s;
+  }
+
+  // Suggests decode steps for the given text, best first.
+  // Returns [{ ops: [opId...], label, score, preview }].
+  function detect(input) {
+    const t = input.trim();
+    if (t.length < 4) return [];
+    const found = [];
+    const add = (ops, label, bytes, score) => found.push({ ops, label, score, preview: preview(bytes) });
+
+    // Judge a decoded byte buffer: text, UTF-16LE text, or a known file type.
+    const judge = (ops, label, bytes) => {
+      if (!bytes.length) return;
+      if (looksUtf16le(bytes)) {
+        const u = utf16leDecode(bytes);
+        add([...ops, 'utf16le-decode'], `${label} → UTF-16LE text (PowerShell -EncodedCommand?)`, u, printableRatio(u) + 0.05);
+        return;
+      }
+      const kind = sniff(bytes);
+      if (kind) { add(ops, `${label} → ${kind}`, bytes, 0.8); return; }
+      add(ops, label, bytes, printableRatio(bytes));
+    };
+
+    const compact = t.replace(/\s+/g, '');
+
+    if (compact.length >= 8 && compact.length % 4 !== 1 && /^[A-Za-z0-9+/_-]+={0,2}$/.test(compact)) {
+      try { judge(['b64-decode'], 'Base64', base64Decode(compact)); } catch (_) { /* not Base64 */ }
+    }
+    const hexCompact = t.replace(/0x|\\x/gi, '').replace(/[\s:,;-]+/g, '');
+    if (hexCompact.length >= 4 && hexCompact.length % 2 === 0 && /^[0-9a-f]+$/i.test(hexCompact)) {
+      try { judge(['hex-decode'], 'Hex', hexDecode(t)); } catch (_) { /* not hex */ }
+    }
+    if (/^[01\s,]+$/.test(t) && compact.replace(/,/g, '').length % 8 === 0) {
+      try { judge(['binary-decode'], 'Binary', binaryDecode(t)); } catch (_) { /* not binary */ }
+    }
+    if (/%[0-9a-f]{2}/i.test(t)) {
+      const out = urlDecode(utf8(t));
+      add(['url-decode'], 'URL encoding', out, 0.6 + 0.3 * printableRatio(out));
+    }
+    if (/&(#x?[0-9a-f]+|[a-z][a-z0-9]*);/i.test(t)) {
+      const out = utf8(htmlDecode(t));
+      if (text(out) !== t) add(['html-decode'], 'HTML entities', out, 0.6 + 0.3 * printableRatio(out));
+    }
+    if (/\\u[0-9a-f]{4}|\\u\{[0-9a-f]+\}|\\x[0-9a-f]{2}/i.test(t)) {
+      const out = unicodeUnescape(t);
+      add(['unicode-unescape'], 'Unicode / \\x escapes', out, 0.65 + 0.3 * printableRatio(out));
+    }
+
+    return found
+      .filter((f) => f.score >= 0.75)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4);
+  }
+
+  // Classic hex dump: offset, 16 hex bytes, ASCII column.
+  function hexdump(bytes, maxBytes = 65536) {
+    const n = Math.min(bytes.length, maxBytes);
+    const lines = [];
+    for (let off = 0; off < n; off += 16) {
+      const row = bytes.subarray(off, Math.min(off + 16, n));
+      const hex = Array.from(row, (b) => b.toString(16).padStart(2, '0'));
+      const left = hex.slice(0, 8).join(' ');
+      const right = hex.slice(8).join(' ');
+      const ascii = Array.from(row, (b) => (b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : '.')).join('');
+      lines.push(`${off.toString(16).padStart(8, '0')}  ${left.padEnd(23)}  ${right.padEnd(23)}  |${ascii}|`);
+    }
+    return lines.join('\n');
+  }
+
+  return {
+    utf8, text,
+    base64Encode, base64Decode,
+    hexEncode, hexDecode,
+    urlEncode, urlDecode,
+    htmlEncode, htmlDecode,
+    rot13,
+    binaryEncode, binaryDecode,
+    unicodeEscape, unicodeUnescape,
+    utf16leEncode, utf16leDecode,
+    OPS, OP_BY_ID, runRecipe,
+    printableRatio, sniff, looksUtf16le, detect, hexdump,
+  };
+});
+</script>
+<script>
+/*
+ * hashes.js: incremental MD5, SHA-1, SHA-256, SHA-384, SHA-512 and HMAC.
+ *
+ * Why not crypto.subtle.digest: it cannot stream (the whole file must be in
+ * memory), it has no MD5, and it only exists in secure contexts. These
+ * implementations take data in chunks, so files of any size hash with flat memory.
+ *
+ * The factory is self-contained (no outside references) because the Hashing
+ * module also runs it inside a Web Worker built from its source text.
+ * Checked against NIST/RFC vectors and against Node's OpenSSL in the tests.
+ */
+(function (root, factory) {
+  const lib = factory();
+  lib.factorySource = '(' + factory.toString() + ')';
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).hashes = lib;
+})(globalThis, function () {
+  'use strict';
+
+  // ---------------------------------------------------------------- Constants
+  // SHA constants are the fractional bits of square/cube roots of primes.
+  // Computed exactly with BigInt integer roots instead of pasting 100+ magic numbers.
+
+  function firstPrimes(n) {
+    const out = [];
+    for (let c = 2; out.length < n; c++) if (out.every((p) => c % p)) out.push(c);
+    return out;
+  }
+
+  // floor(n^(1/k)) for BigInt n > 0, by Newton's method from above.
+  function iroot(n, k) {
+    const K = BigInt(k);
+    let x = 1n << (BigInt(n.toString(2).length) / K + 1n);
+    for (;;) {
+      const y = ((K - 1n) * x + n / x ** (K - 1n)) / K;
+      if (y >= x) return x;
+      x = y;
+    }
+  }
+
+  // First `bits` fractional bits of p^(1/k).
+  function fracBits(p, k, bits) {
+    return iroot(BigInt(p) << BigInt(k * bits), k) & ((1n << BigInt(bits)) - 1n);
+  }
+
+  const PRIMES = firstPrimes(80);
+
+  const K256 = Int32Array.from(PRIMES.slice(0, 64), (p) => Number(fracBits(p, 3, 32)));
+  const IV256 = Int32Array.from(PRIMES.slice(0, 8), (p) => Number(fracBits(p, 2, 32)));
+
+  function split64(values) {
+    const out = new Int32Array(values.length * 2);
+    values.forEach((v, i) => { out[i * 2] = Number(v >> 32n); out[i * 2 + 1] = Number(v & 0xffffffffn); });
+    return out;
+  }
+  const K512 = split64(PRIMES.map((p) => fracBits(p, 3, 64)));
+  const IV512 = split64(PRIMES.slice(0, 8).map((p) => fracBits(p, 2, 64)));
+  const IV384 = split64(PRIMES.slice(8, 16).map((p) => fracBits(p, 2, 64)));
+
+  // MD5 (RFC 1321): K[i] = floor(|sin(i + 1)| * 2^32).
+  const MD5_K = Int32Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296));
+  const MD5_R = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+
+  // ---------------------------------------------------------------- Compression functions
+
+  const M16 = new Int32Array(16);
+  function md5Block(s, view, off) {
+    const M = M16;
+    for (let i = 0; i < 16; i++) M[i] = view.getInt32(off + i * 4, true);
+    let a = s[0], b = s[1], c = s[2], d = s[3];
+    for (let i = 0; i < 64; i++) {
+      let f, g;
+      if (i < 16) { f = (b & c) | (~b & d); g = i; }
+      else if (i < 32) { f = (d & b) | (~d & c); g = (5 * i + 1) & 15; }
+      else if (i < 48) { f = b ^ c ^ d; g = (3 * i + 5) & 15; }
+      else { f = c ^ (b | ~d); g = (7 * i) & 15; }
+      const r = MD5_R[((i >> 4) << 2) | (i & 3)];
+      const x = (a + f + MD5_K[i] + M[g]) | 0;
+      a = d; d = c; c = b;
+      b = (b + ((x << r) | (x >>> (32 - r)))) | 0;
+    }
+    s[0] = (s[0] + a) | 0; s[1] = (s[1] + b) | 0; s[2] = (s[2] + c) | 0; s[3] = (s[3] + d) | 0;
+  }
+
+  const W80 = new Int32Array(80);
+  function sha1Block(s, view, off) {
+    const W = W80;
+    for (let i = 0; i < 16; i++) W[i] = view.getInt32(off + i * 4);
+    for (let i = 16; i < 80; i++) {
+      const x = W[i - 3] ^ W[i - 8] ^ W[i - 14] ^ W[i - 16];
+      W[i] = (x << 1) | (x >>> 31);
+    }
+    let a = s[0], b = s[1], c = s[2], d = s[3], e = s[4];
+    for (let i = 0; i < 80; i++) {
+      let f, k;
+      if (i < 20) { f = (b & c) | (~b & d); k = 0x5a827999; }
+      else if (i < 40) { f = b ^ c ^ d; k = 0x6ed9eba1; }
+      else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8f1bbcdc; }
+      else { f = b ^ c ^ d; k = 0xca62c1d6; }
+      const t = (((a << 5) | (a >>> 27)) + f + e + k + W[i]) | 0;
+      e = d; d = c; c = (b << 30) | (b >>> 2); b = a; a = t;
+    }
+    s[0] = (s[0] + a) | 0; s[1] = (s[1] + b) | 0; s[2] = (s[2] + c) | 0; s[3] = (s[3] + d) | 0; s[4] = (s[4] + e) | 0;
+  }
+
+  const W64 = new Int32Array(64);
+  function sha256Block(s, view, off) {
+    const W = W64;
+    for (let i = 0; i < 16; i++) W[i] = view.getInt32(off + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const x = W[i - 15], y = W[i - 2];
+      const s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+      const s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+      W[i] = (W[i - 16] + s0 + W[i - 7] + s1) | 0;
+    }
+    let a = s[0], b = s[1], c = s[2], d = s[3], e = s[4], f = s[5], g = s[6], h = s[7];
+    for (let i = 0; i < 64; i++) {
+      const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      const choose = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + choose + K256[i] + W[i]) | 0;
+      const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    s[0] = (s[0] + a) | 0; s[1] = (s[1] + b) | 0; s[2] = (s[2] + c) | 0; s[3] = (s[3] + d) | 0;
+    s[4] = (s[4] + e) | 0; s[5] = (s[5] + f) | 0; s[6] = (s[6] + g) | 0; s[7] = (s[7] + h) | 0;
+  }
+
+  // SHA-512 works on 64-bit words, stored as (high, low) pairs of 32-bit ints.
+  // Additions carry from low to high through ordinary Number arithmetic.
+  const TWO32 = 4294967296;
+  const W160 = new Int32Array(160);
+  function sha512Block(s, view, off) {
+    const W = W160;
+    for (let i = 0; i < 32; i++) W[i] = view.getInt32(off + i * 4);
+    for (let i = 16; i < 80; i++) {
+      let xh = W[(i - 15) * 2], xl = W[(i - 15) * 2 + 1];
+      // sigma0 = rotr 1 ^ rotr 8 ^ shr 7
+      const s0h = ((xh >>> 1) | (xl << 31)) ^ ((xh >>> 8) | (xl << 24)) ^ (xh >>> 7);
+      const s0l = ((xl >>> 1) | (xh << 31)) ^ ((xl >>> 8) | (xh << 24)) ^ ((xl >>> 7) | (xh << 25));
+      xh = W[(i - 2) * 2]; xl = W[(i - 2) * 2 + 1];
+      // sigma1 = rotr 19 ^ rotr 61 ^ shr 6
+      const s1h = ((xh >>> 19) | (xl << 13)) ^ ((xl >>> 29) | (xh << 3)) ^ (xh >>> 6);
+      const s1l = ((xl >>> 19) | (xh << 13)) ^ ((xh >>> 29) | (xl << 3)) ^ ((xl >>> 6) | (xh << 26));
+      const lo = (W[(i - 16) * 2 + 1] >>> 0) + (s0l >>> 0) + (W[(i - 7) * 2 + 1] >>> 0) + (s1l >>> 0);
+      W[i * 2] = (W[(i - 16) * 2] + s0h + W[(i - 7) * 2] + s1h + Math.floor(lo / TWO32)) | 0;
+      W[i * 2 + 1] = lo | 0;
+    }
+    let ah = s[0], al = s[1], bh = s[2], bl = s[3], ch = s[4], cl = s[5], dh = s[6], dl = s[7];
+    let eh = s[8], el = s[9], fh = s[10], fl = s[11], gh = s[12], gl = s[13], hh = s[14], hl = s[15];
+    for (let i = 0; i < 80; i++) {
+      // Sigma1(e) = rotr 14 ^ rotr 18 ^ rotr 41
+      const S1h = ((eh >>> 14) | (el << 18)) ^ ((eh >>> 18) | (el << 14)) ^ ((el >>> 9) | (eh << 23));
+      const S1l = ((el >>> 14) | (eh << 18)) ^ ((el >>> 18) | (eh << 14)) ^ ((eh >>> 9) | (el << 23));
+      const chooseH = (eh & fh) ^ (~eh & gh), chooseL = (el & fl) ^ (~el & gl);
+      let lo = (hl >>> 0) + (S1l >>> 0) + (chooseL >>> 0) + (K512[i * 2 + 1] >>> 0) + (W[i * 2 + 1] >>> 0);
+      const t1h = (hh + S1h + chooseH + K512[i * 2] + W[i * 2] + Math.floor(lo / TWO32)) | 0;
+      const t1l = lo | 0;
+      // Sigma0(a) = rotr 28 ^ rotr 34 ^ rotr 39
+      const S0h = ((ah >>> 28) | (al << 4)) ^ ((al >>> 2) | (ah << 30)) ^ ((al >>> 7) | (ah << 25));
+      const S0l = ((al >>> 28) | (ah << 4)) ^ ((ah >>> 2) | (al << 30)) ^ ((ah >>> 7) | (al << 25));
+      const majH = (ah & bh) ^ (ah & ch) ^ (bh & ch), majL = (al & bl) ^ (al & cl) ^ (bl & cl);
+      lo = (S0l >>> 0) + (majL >>> 0);
+      const t2h = (S0h + majH + Math.floor(lo / TWO32)) | 0;
+      const t2l = lo | 0;
+      hh = gh; hl = gl; gh = fh; gl = fl; fh = eh; fl = el;
+      lo = (dl >>> 0) + (t1l >>> 0);
+      eh = (dh + t1h + Math.floor(lo / TWO32)) | 0; el = lo | 0;
+      dh = ch; dl = cl; ch = bh; cl = bl; bh = ah; bl = al;
+      lo = (t1l >>> 0) + (t2l >>> 0);
+      ah = (t1h + t2h + Math.floor(lo / TWO32)) | 0; al = lo | 0;
+    }
+    const v = [ah, al, bh, bl, ch, cl, dh, dl, eh, el, fh, fl, gh, gl, hh, hl];
+    for (let i = 0; i < 16; i += 2) {
+      const lo = (s[i + 1] >>> 0) + (v[i + 1] >>> 0);
+      s[i] = (s[i] + v[i] + Math.floor(lo / TWO32)) | 0;
+      s[i + 1] = lo | 0;
+    }
+  }
+
+  // ---------------------------------------------------------------- Algorithms
+
+  function wordsOut(s, nBytes, littleEndian) {
+    const out = new Uint8Array(nBytes);
+    const v = new DataView(out.buffer);
+    for (let i = 0; i < nBytes / 4; i++) v.setInt32(i * 4, s[i], littleEndian);
+    return out;
+  }
+
+  const ALGORITHMS = {
+    md5: { name: 'MD5', blockSize: 64, littleEndian: true, block: md5Block, size: 16,
+      init: () => Int32Array.from([0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476]) },
+    sha1: { name: 'SHA-1', blockSize: 64, littleEndian: false, block: sha1Block, size: 20,
+      init: () => Int32Array.from([0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0]) },
+    sha256: { name: 'SHA-256', blockSize: 64, littleEndian: false, block: sha256Block, size: 32,
+      init: () => IV256.slice() },
+    sha384: { name: 'SHA-384', blockSize: 128, littleEndian: false, block: sha512Block, size: 48,
+      init: () => IV384.slice() },
+    sha512: { name: 'SHA-512', blockSize: 128, littleEndian: false, block: sha512Block, size: 64,
+      init: () => IV512.slice() },
+  };
+
+  // createHash('sha256').update(bytes).update(more).digest() -> Uint8Array
+  function createHash(alg) {
+    const spec = ALGORITHMS[alg];
+    if (!spec) throw new Error(`Unknown hash algorithm "${alg}"`);
+    const { blockSize, littleEndian, block } = spec;
+    const state = spec.init();
+    const buf = new Uint8Array(blockSize);
+    const bufView = new DataView(buf.buffer);
+    let bufLen = 0;
+    let total = 0;
+    let finished = false;
+
+    const hasher = {
+      algorithm: alg,
+      update(data) {
+        if (finished) throw new Error('digest() was already called');
+        total += data.length;
+        let pos = 0;
+        if (bufLen) {
+          pos = Math.min(blockSize - bufLen, data.length);
+          buf.set(data.subarray(0, pos), bufLen);
+          bufLen += pos;
+          if (bufLen < blockSize) return hasher;
+          block(state, bufView, 0);
+          bufLen = 0;
+        }
+        const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+        for (; pos + blockSize <= data.length; pos += blockSize) block(state, view, pos);
+        buf.set(data.subarray(pos), 0);
+        bufLen = data.length - pos;
+        return hasher;
+      },
+      digest() {
+        if (finished) throw new Error('digest() was already called');
+        // Padding: 0x80, zeros, then the message length in bits (64-bit, or 128-bit for SHA-384/512).
+        const lenBytes = blockSize === 128 ? 16 : 8;
+        const bits = total * 8;
+        const zeros = (blockSize - ((total + 1 + lenBytes) % blockSize)) % blockSize;
+        const pad = new Uint8Array(1 + zeros + lenBytes);
+        pad[0] = 0x80;
+        const v = new DataView(pad.buffer);
+        const hi = Math.floor(bits / TWO32), lo = bits >>> 0;
+        if (littleEndian) { v.setUint32(pad.length - 8, lo, true); v.setUint32(pad.length - 4, hi, true); }
+        else { v.setUint32(pad.length - 8, hi); v.setUint32(pad.length - 4, lo); }
+        hasher.update(pad);
+        finished = true;
+        return wordsOut(state, spec.size, littleEndian);
+      },
+    };
+    return hasher;
+  }
+
+  function hash(alg, bytes) {
+    return createHash(alg).update(bytes).digest();
+  }
+
+  // HMAC (RFC 2104) with any of the algorithms above.
+  function hmac(alg, key, message) {
+    const { blockSize } = ALGORITHMS[alg];
+    let k = key.length > blockSize ? hash(alg, key) : key;
+    const padded = new Uint8Array(blockSize);
+    padded.set(k);
+    const ipad = padded.map((b) => b ^ 0x36);
+    const opad = padded.map((b) => b ^ 0x5c);
+    const inner = createHash(alg).update(ipad).update(message).digest();
+    return createHash(alg).update(opad).update(inner).digest();
+  }
+
+  function toHex(bytes) {
+    let s = '';
+    for (const b of bytes) s += b.toString(16).padStart(2, '0');
+    return s;
+  }
+
+  const NAMES = Object.fromEntries(Object.entries(ALGORITHMS).map(([id, a]) => [id, a.name]));
+
+  return { createHash, hash, hmac, toHex, NAMES };
+});
+</script>
+<script>
+/*
+ * IANA top-level domains (1437 entries, Version 2026100700).
+ * Generated by scripts/update-tlds.js from https://data.iana.org/TLD/tlds-alpha-by-domain.txt. Do not edit by hand.
+ */
+(function (root, list) {
+  const tlds = new Set(list.join(' ').split(' '));
+  if (typeof module === 'object' && module.exports) module.exports = tlds;
+  else (root.OAT = root.OAT || {}).tlds = tlds;
+})(globalThis, [
+  'aaa aarp abb abbott abbvie abc able abogado abudhabi ac academy accenture accountant accountants aco',
+  'actor ad ads adult ae aeg aero aetna af afl africa ag agakhan agency ai aig airbus airforce airtel',
+  'akdn al alibaba alipay allfinanz allstate ally alsace alstom am amazon americanexpress',
+  'americanfamily amex amfam amica amsterdam analytics android anquan anz ao aol apartments app apple',
+  'aq aquarelle ar arab aramco archi army arpa art arte as asda asia associates at athleta attorney au',
+  'auction audi audible audio auspost author auto autos aw aws ax axa az azure ba baby baidu banamex',
+  'band bank bar barcelona barclaycard barclays barefoot bargains baseball basketball bauhaus bayern bb',
+  'bbc bbt bbva bcg bcn bd be beats beauty beer berlin best bestbuy bet bf bg bh bharti bi bible bid',
+  'bike bing bingo bio biz bj black blackfriday blockbuster blog bloomberg blue bm bms bmw bn',
+  'bnpparibas bo boats boehringer bofa bom bond boo book booking bosch bostik boston bot boutique box',
+  'br bradesco bridgestone broadway broker brother brussels bs bt build builders business buy buzz bv',
+  'bw by bz bzh ca cab cafe cal call calvinklein cam camera camp canon capetown capital capitalone car',
+  'caravan cards care career careers cars casa case cash casino cat catering catholic cba cbn cbre cc',
+  'cd center ceo cern cf cfa cfd cg ch chanel channel charity chase chat cheap chintai christmas chrome',
+  'church ci cipriani circle cisco citadel citi citic city ck cl claims cleaning click clinic clinique',
+  'clothing cloud club clubmed cm cn co coach codes coffee college cologne com commbank community',
+  'company compare computer comsec condos construction consulting contact contractors cooking cool coop',
+  'corsica country coupon coupons courses cpa cr credit creditcard creditunion cricket crown crs cruise',
+  'cruises cu cuisinella cv cw cx cy cymru cyou cz dad dance data date dating datsun day dclk dds de',
+  'deal dealer deals degree delivery dell deloitte delta democrat dental dentist desi design dev dhl',
+  'diamonds diet digital direct directory discount discover dish diy dj dk dm dnp do docs doctor dog',
+  'domains dot download drive dtv dubai dupont durban dvag dvr dz earth eat ec eco edeka edu education',
+  'ee eg email emerck energy engineer engineering enterprises epson equipment er ericsson erni es esq',
+  'estate et eu eurovision eus events exchange expert exposed express extraspace fage fail fairwinds',
+  'faith family fan fans farm farmers fashion fast fedex feedback ferrari ferrero fi fidelity fido film',
+  'final finance financial fire firestone firmdale fish fishing fit fitness fj fk flickr flights flir',
+  'florist flowers fly fm fo foo food football ford forex forsale forum foundation fox fr free',
+  'fresenius frl frogans frontier ftr fujitsu fun fund furniture futbol fyi ga gal gallery gallo gallup',
+  'game games gap garden gay gb gbiz gd gdn ge gea gent genting george gf gg ggee gh gi gift gifts',
+  'gives giving gl glass gle global globo gm gmail gmbh gmo gmx gn godaddy gold goldpoint golf goodyear',
+  'goog google gop got gov gp gq gr grainger graphics gratis green gripe grocery group gs gt gu gucci',
+  'guge guide guitars guru gw gy hair hamburg hangout haus hbo hdfc hdfcbank health healthcare help',
+  'helsinki here hermes hiphop hisamitsu hitachi hiv hk hkt hm hn hockey holdings holiday homedepot',
+  'homegoods homes homesense honda horse hospital host hosting hot hotels hotmail house how hr hsbc ht',
+  'hu hughes hyatt hyundai ibm icbc ice icu id ie ieee ifm ikano il im imamat imdb immo immobilien in',
+  'inc industries infiniti info ing ink institute insurance insure int international intuit investments',
+  'io ipiranga iq ir irish is ismaili ist istanbul it itau itv jaguar java jcb je jeep jetzt jewelry',
+  'jio jll jm jmp jnj jo jobs joburg jot joy jp jpmorgan jprs juegos kaufen kddi ke kerryhotels',
+  'kerryproperties kfh kg kh ki kia kids kim kindle kitchen kiwi km kn koeln komatsu kosher kp kpmg kpn',
+  'kr krd kred kuokgroup kw ky kyoto kz la lacaixa lamborghini lamer land landrover lanxess lasalle lat',
+  'latino latrobe law lawyer lb lc lds lease leclerc lefrak legal lego lexus lgbt li lidl life',
+  'lifeinsurance lifestyle lighting like lilly limited limo lincoln link live living lk llc llp loan',
+  'loans locker locus lol london lotte lotto love lpl lplfinancial lr ls lt ltd ltda lu lundbeck luxe',
+  'luxury lv ly ma madrid maif maison makeup man management mango map market marketing markets marriott',
+  'marshalls mattel mba mc mckinsey md me med media meet melbourne meme memorial men menu merck',
+  'merckmsd mg mh miami microsoft mil mini mint mit mitsubishi mk ml mlb mls mm mma mn mo mobi mobile',
+  'moda moe moi mom monash money monster mormon mortgage moscow moto motorcycles mov movie mp mq mr ms',
+  'msd mt mtn mtr mu museum music mv mw mx my mz na nab nagoya name navy nba nc ne nec net netbank',
+  'netflix network neustar new news next nextdirect nexus nf nfl ng ngo nhk ni nico nike nikon ninja',
+  'nissan nissay nl no nokia norton now nowruz nowtv np nr nra nrw ntt nu nyc nz obi observer office',
+  'okinawa olayan olayangroup ollo om omega one ong onl online ooo open oracle orange org organic',
+  'origins osaka otsuka ott ovh pa page panasonic paris pars partners parts party pay pccw pe pet pf',
+  'pfizer pg ph pharmacy phd philips phone photo photography photos physio pics pictet pictures pid pin',
+  'ping pink pioneer pizza pk pl place play playstation plumbing plus pm pn pnc pohl poker politie porn',
+  'post pr praxi press prime pro prod productions prof progressive promo properties property protection',
+  'pru prudential ps pt pub pw pwc py qa qpon quebec quest racing radio re read realestate realtor',
+  'realty recipes red redumbrella rehab reise reisen reit reliance ren rent rentals repair report',
+  'republican rest restaurant review reviews rexroth rich richardli ricoh ril rio rip ro rocks rodeo',
+  'rogers room rs rsvp ru rugby ruhr run rw rwe ryukyu sa saarland safe safety sakura sale salon',
+  'samsclub samsung sandvik sandvikcoromant sanofi sap sarl sas save saxo sb sbi sbs sc scb schaeffler',
+  'schmidt scholarships school schule schwarz science scot sd se search seat secure security seek',
+  'select sener services seven sew sex sexy sfr sg sh shangrila sharp shell shia shiksha shoes shop',
+  'shopping shouji show si silk sina singles site sj sk ski skin sky skype sl sling sm smart smile sn',
+  'sncf so soccer social softbank software sohu solar solutions song sony soy spa space sport spot sr',
+  'srl ss st stada staples star statebank statefarm stc stcgroup stockholm storage store stream studio',
+  'study style su sucks supplies supply support surf surgery suzuki sv swatch swiss sx sy sydney',
+  'systems sz tab taipei talk taobao target tatamotors tatar tattoo tax taxi tc tci td tdk team tech',
+  'technology tel temasek tennis teva tf tg th thd theater theatre tiaa tickets tienda tips tires tirol',
+  'tj tjmaxx tjx tk tkmaxx tl tm tmall tn to today tokyo tools top toray toshiba total tours town',
+  'toyota toys tr trade trading training travel travelers travelersinsurance trust trv tt tube tui',
+  'tunes tushu tv tvs tw tz ua ubank ubs ug uk unicom university uno uol ups us uy uz va vacations vana',
+  'vanguard vc ve vegas ventures verisign versicherung vet vg vi viajes video vig viking villas vin vip',
+  'virgin visa vision viva vivo vlaanderen vn vodka volvo vote voting voto voyage vu wales walmart',
+  'walter wang wanggou watch watches weather weatherchannel web webcam weber website wed wedding weibo',
+  'weir wf whoswho wien wiki williamhill win windows wine winners wme woodside work works world wow ws',
+  'wtc wtf xbox xerox xihuan xin xn--11b4c3d xn--1ck2e1b xn--1qqw23a xn--2scrj9c xn--30rr7y xn--3bst00m',
+  'xn--3ds443g xn--3e0b707e xn--3hcrj9c xn--3pxu8k xn--42c2d9a xn--45br5cyl xn--45brj9c xn--45q11c',
+  'xn--4dbrk0ce xn--4gbrim xn--54b7fta0cc xn--55qw42g xn--55qx5d xn--5su34j936bgsg xn--5tzm5g',
+  'xn--6frz82g xn--6qq986b3xl xn--80adxhks xn--80ao21a xn--80aqecdr1a xn--80asehdb xn--80aswg',
+  'xn--8y0a063a xn--90a3ac xn--90ae xn--90ais xn--9dbq2a xn--9et52u xn--9krt00a xn--b4w605ferd',
+  'xn--bck1b9a5dre4c xn--c1avg xn--c2br7g xn--cck2b3b xn--cckwcxetd xn--cg4bki xn--clchc0ea0b2g2a9gcd',
+  'xn--czr694b xn--czrs0t xn--czru2d xn--d1acj3b xn--d1alf xn--e1a4c xn--eckvdtc9d xn--efvy88h',
+  'xn--fct429k xn--fhbei xn--fiq228c5hs xn--fiq64b xn--fiqs8s xn--fiqz9s xn--fjq720a xn--flw351e',
+  'xn--fpcrj9c3d xn--fzc2c9e2c xn--fzys8d69uvgm xn--g2xx48c xn--gckr3f0f xn--gecrj9c xn--gk3at1e',
+  'xn--h2breg3eve xn--h2brj9c xn--h2brj9c8c xn--hxt814e xn--i1b6b1a6a2e xn--imr513n xn--io0a7i',
+  'xn--j1aef xn--j1amh xn--j6w193g xn--jlq480n2rg xn--jvr189m xn--kcrx77d1x4a xn--kprw13d xn--kpry57d',
+  'xn--kput3i xn--l1acc xn--lgbbat1ad8j xn--mgb9awbf xn--mgba3a3ejt xn--mgba3a4f16a xn--mgba7c0bbn0a',
+  'xn--mgbaam7a8h xn--mgbab2bd xn--mgbah1a3hjkrd xn--mgbai9azgqp6j xn--mgbayh7gpa xn--mgbbh1a',
+  'xn--mgbbh1a71e xn--mgbc0a9azcg xn--mgbca7dzdo xn--mgbcpq6gpa1a xn--mgberp4a5d4ar xn--mgbgu82a',
+  'xn--mgbi4ecexp xn--mgbpl2fh xn--mgbt3dhd xn--mgbtx2b xn--mgbx4cd0ab xn--mix891f xn--mk1bu44c',
+  'xn--mxtq1m xn--ngbc5azd xn--ngbe9e0a xn--ngbrx xn--node xn--nqv7f xn--nqv7fs00ema xn--nyqy26a',
+  'xn--o3cw4h xn--ogbpf8fl xn--otu796d xn--p1acf xn--p1ai xn--pgbs0dh xn--pssy2u xn--q7ce6a xn--q9jyb4c',
+  'xn--qcka1pmc xn--qxa6a xn--qxam xn--rhqv96g xn--rovu88b xn--rvc1e0am3e xn--s9brj9c xn--ses554g',
+  'xn--t60b56a xn--tckwe xn--tiq49xqyj xn--unup4y xn--vermgensberater-ctb xn--vermgensberatung-pwb',
+  'xn--vhquv xn--vuq861b xn--w4r85el8fhu5dnra xn--w4rs40l xn--wgbh1c xn--wgbl6a xn--xhq521b',
+  'xn--xkc2al3hye2a xn--xkc2dl3a5ee0h xn--y9a3aq xn--yfro4i67o xn--ygbi2ammx xn--zfr164b xxx xyz yachts',
+  'yahoo yamaxun yandex ye yodobashi yoga yokohama you youtube yt yun za zappos zara zero zip zm zone',
+  'zuerich zw',
+]);
+</script>
+<script>
+/*
+ * ioc.js: find, classify, refang and defang indicators of compromise.
+ *
+ * Types: url, domain, ipv4, ipv6, email, md5, sha1, sha256, sha512, cve, mitre.
+ * Domains are checked against the bundled IANA TLD list (lib/tlds.js) to cut
+ * false positives such as "invoice.pdf.exe" or "System.Net.WebClient".
+ */
+(function (root, factory) {
+  const lib = factory();
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).ioc = lib;
+})(globalThis, function () {
+  'use strict';
+
+  const tlds = () => globalThis.OAT.tlds;
+
+  const TYPES = [
+    { id: 'url', label: 'URLs' },
+    { id: 'domain', label: 'Domains' },
+    { id: 'ipv4', label: 'IPv4' },
+    { id: 'ipv6', label: 'IPv6' },
+    { id: 'email', label: 'Emails' },
+    { id: 'md5', label: 'MD5' },
+    { id: 'sha1', label: 'SHA-1' },
+    { id: 'sha256', label: 'SHA-256' },
+    { id: 'sha512', label: 'SHA-512' },
+    { id: 'cve', label: 'CVE IDs' },
+    { id: 'mitre', label: 'MITRE ATT&CK' },
+  ];
+
+  // TLDs that are also common file extensions. "report.zip" is more likely a file
+  // than a domain, so these are only reported when the caller asks for them.
+  // (.cc and .so are left out on purpose: both are real, frequently abused TLDs.)
+  const FILE_LIKE_TLDS = new Set(['zip', 'mov', 'py', 'sh', 'md', 'pl', 'ps', 'rs', 'cs', 'js', 'ts', 'rar', 'tar', 'bin', 'log', 'ini', 'dat', 'tmp', 'sys']);
+
+  // ---------------------------------------------------------------- Refang / defang
+
+  // Undo the common defanging styles. Applied before extraction so
+  // "hxxps://evil[.]com" and "user[@]evil(.)com" are found.
+  function refang(text) {
+    return text
+      .replace(/\bh(?:xx|XX|\*\*|tt)p(s?)(?=\[?:)/g, 'http$1')
+      .replace(/\bfxp(?=\[?:)/gi, 'ftp')
+      .replace(/\[:\/\/\]/g, '://')
+      .replace(/\[:\]|\(:\)/g, ':')
+      .replace(/\s?\[(?:\.|dot)\]\s?|\s?\((?:\.|dot)\)\s?|\{(?:\.|dot)\}|\[\s\.\s\]/gi, '.')
+      .replace(/\\\./g, '.')
+      .replace(/\s?\[(?:@|at)\]\s?|\s?\((?:@|at)\)\s?|\{@\}/gi, '@');
+  }
+
+  // Defang every indicator in the text, leaving everything else untouched.
+  // Already-defanged input is refanged first, so running this twice is safe.
+  function defang(text, { fileLike = false } = {}) {
+    const clean = refang(text);
+    const spans = outermost(findAll(clean, { fileLike }).filter((m) => ['url', 'domain', 'ipv4', 'ipv6', 'email'].includes(m.type)));
+    let out = '';
+    let last = 0;
+    for (const m of spans) {
+      out += clean.slice(last, m.start) + defangValue(m.type, clean.slice(m.start, m.end));
+      last = m.end;
+    }
+    return { text: out + clean.slice(last), count: spans.length };
+  }
+
+  function defangValue(type, v) {
+    switch (type) {
+      case 'url': {
+        const m = v.match(/^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)(.*)$/is);
+        if (!m) return v.replace(/\./g, '[.]');
+        const scheme = m[1].toLowerCase().replace(/^http/, 'hxxp').replace(/^ftp/, 'fxp');
+        return `${scheme}[://]${m[2].replace(/\./g, '[.]')}${m[3]}`;
+      }
+      case 'email': return v.replace('@', '[@]').replace(/\./g, '[.]');
+      case 'ipv6': return v.replace(/:/g, '[:]');
+      default: return v.replace(/\./g, '[.]');
+    }
+  }
+
+  // Keep only spans that are not inside an earlier, longer span.
+  function outermost(matches) {
+    const sorted = [...matches].sort((a, b) => a.start - b.start || b.end - a.end);
+    const out = [];
+    let reach = -1;
+    for (const m of sorted) {
+      if (m.start >= reach) { out.push(m); reach = m.end; }
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- Matching
+
+  const OCTET = '(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
+  const RE = {
+    url: /\b(?:https?|ftp):\/\/[^\s<>"'`{}|\\^]+/gi,
+    email: /\b[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z][A-Za-z0-9-]{1,62}\b/g,
+    // Not part of a longer dotted number (1.2.3.4.5) or preceded by digits.
+    ipv4: new RegExp(`(?<![\\d.]\\d*)(?<!\\d\\.)${OCTET}(?:\\.${OCTET}){3}(?!\\.?\\d)`, 'g'),
+    ipv6: /(?<![0-9a-f:.])(?:[0-9a-f]{0,4}:){2,7}(?:(?:\d{1,3}\.){3}\d{1,3}|[0-9a-f]{1,4})?(?![0-9a-f:])/gi,
+    domain: /(?<![\w@.-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})(?![\w-])/gi,
+    hash: /\b(?:[a-f0-9]{128}|[a-f0-9]{64}|[a-f0-9]{40}|[a-f0-9]{32})\b/gi,
+    cve: /\bCVE-\d{4}-\d{4,7}\b/gi,
+    mitre: /\bT1\d{3}(?:\.\d{3})?\b/g,
+  };
+
+  const HASH_TYPES = { 32: 'md5', 40: 'sha1', 64: 'sha256', 128: 'sha512' };
+
+  function validIpv6(v) {
+    if ((v.match(/::/g) || []).length > 1) return false;
+    // At least two non-empty groups, so code like "std::" or "a::b" is not an address.
+    if (v.split(':').filter(Boolean).length < 2) return false;
+    const groups = v.split(':').length;
+    if (!v.includes('::') && groups !== 8 && !(groups === 7 && v.includes('.'))) return false;
+    try { new URL(`http://[${v}]/`); return true; } catch (_) { return false; }
+  }
+
+  // Strip trailing punctuation that belongs to the sentence, not the URL.
+  function trimUrl(url) {
+    let u = url.replace(/[.,;:!?'"*]+$/, '');
+    while (u.endsWith(')') && (u.match(/\(/g) || []).length < (u.match(/\)/g) || []).length) u = u.slice(0, -1);
+    while (u.endsWith(']') && !u.includes('[')) u = u.slice(0, -1);
+    return u.replace(/[.,;:!?'"*]+$/, '');
+  }
+
+  function domainInfo(d) {
+    const tld = d.slice(d.lastIndexOf('.') + 1).toLowerCase();
+    return { valid: tlds().has(tld), fileLike: FILE_LIKE_TLDS.has(tld) };
+  }
+
+  // Every match with its position: [{ type, value, start, end }].
+  function findAll(text, { fileLike = false } = {}) {
+    const out = [];
+    const push = (type, value, start, end) => out.push({ type, value, start, end });
+    let m;
+
+    for (const re of Object.values(RE)) re.lastIndex = 0;
+
+    while ((m = RE.url.exec(text))) {
+      const v = trimUrl(m[0]);
+      push('url', v, m.index, m.index + v.length);
+    }
+    while ((m = RE.email.exec(text))) {
+      if (domainInfo(m[0]).valid) push('email', m[0].toLowerCase(), m.index, m.index + m[0].length);
+    }
+    while ((m = RE.ipv4.exec(text))) {
+      // "version 1.2.3.4" and "v1.2.3.4" are versions, not addresses.
+      if (/(?:\bv|\bver\.?|\bversion)\s*$/i.test(text.slice(Math.max(0, m.index - 10), m.index))) continue;
+      push('ipv4', m[0], m.index, m.index + m[0].length);
+    }
+    while ((m = RE.ipv6.exec(text))) {
+      if (validIpv6(m[0])) push('ipv6', m[0].toLowerCase(), m.index, m.index + m[0].length);
+    }
+    while ((m = RE.domain.exec(text))) {
+      const v = m[0].replace(/\.$/, '');
+      const info = domainInfo(v);
+      if (!info.valid || (info.fileLike && !fileLike)) continue;
+      if (/^[\d.]+$/.test(v)) continue;   // numbers like 1.2.3
+      push('domain', v.toLowerCase(), m.index, m.index + v.length);
+    }
+    while ((m = RE.hash.exec(text))) {
+      push(HASH_TYPES[m[0].length], m[0].toLowerCase(), m.index, m.index + m[0].length);
+    }
+    while ((m = RE.cve.exec(text))) push('cve', m[0].toUpperCase(), m.index, m.index + m[0].length);
+    while ((m = RE.mitre.exec(text))) push('mitre', m[0], m.index, m.index + m[0].length);
+
+    return out;
+  }
+
+  // Deduplicated, counted indicators, in first-seen order within each type.
+  // Returns [{ type, value, count, note? }].
+  function extract(text, { refangFirst = true, fileLike = false } = {}) {
+    const source = refangFirst ? refang(text) : text;
+    const byKey = new Map();
+    for (const m of findAll(source, { fileLike })) {
+      const key = `${m.type}\u0000${m.value}`;
+      const item = byKey.get(key);
+      if (item) item.count++;
+      else byKey.set(key, { type: m.type, value: m.value, count: 1 });
+    }
+    const order = Object.fromEntries(TYPES.map((t, i) => [t.id, i]));
+    const items = [...byKey.values()].sort((a, b) => order[a.type] - order[b.type]);
+    for (const it of items) {
+      if (it.type === 'ipv4' || it.type === 'ipv6') {
+        const scope = ipScope(it.value);
+        if (scope !== 'public') it.note = scope;
+      }
+      if (it.type === 'domain' && domainInfo(it.value).fileLike) it.note = 'may be a file name';
+    }
+    return items;
+  }
+
+  // ---------------------------------------------------------------- IP scope
+
+  function ipv4Scope(ip) {
+    const [a, b, c] = ip.split('.').map(Number);
+    if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return 'private';
+    if (a === 127) return 'loopback';
+    if (a === 169 && b === 254) return 'link-local';
+    if (a === 100 && b >= 64 && b <= 127) return 'carrier-grade NAT';
+    if (a >= 224 && a <= 239) return 'multicast';
+    if (a === 0 || a >= 240) return 'reserved';
+    if ((a === 192 && b === 0 && c === 2) || (a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113)) return 'documentation';
+    if (a === 198 && (b === 18 || b === 19)) return 'benchmarking';
+    return 'public';
+  }
+
+  function ipv6Scope(ip) {
+    const v = ip.toLowerCase();
+    if (v === '::1') return 'loopback';
+    if (/^fe[89ab]/.test(v)) return 'link-local';
+    if (/^f[cd]/.test(v)) return 'private';
+    if (/^ff/.test(v)) return 'multicast';
+    if (/^2001:0?db8:/.test(v)) return 'documentation';
+    const mapped = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return ipv4Scope(mapped[1]);
+    return 'public';
+  }
+
+  function ipScope(ip) {
+    return ip.includes(':') ? ipv6Scope(ip) : ipv4Scope(ip);
+  }
+
+  // What kind of indicator is this single value? Returns a type id or null.
+  function classify(value) {
+    const v = refang(value.trim());
+    const found = outermost(findAll(v, { fileLike: true }));
+    return found.length === 1 && found[0].start === 0 && found[0].end === v.length ? found[0].type : null;
+  }
+
+  return { TYPES, refang, defang, findAll, extract, ipScope, classify };
+});
+</script>
+<script>
+/*
+ * jwt.js: decode JSON Web Tokens and flag risky properties. Never sends the
+ * token anywhere. HMAC signatures (HS256/384/512) can be checked locally with
+ * a secret the analyst supplies; RS/ES/PS tokens need the issuer's public key,
+ * which is out of scope for an offline decoder.
+ */
+(function (root, factory) {
+  const lib = factory();
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).jwt = lib;
+})(globalThis, function () {
+  'use strict';
+
+  const codecs = () => globalThis.OAT.codecs;
+  const hashes = () => globalThis.OAT.hashes;
+
+  const HMAC_ALGS = { HS256: 'sha256', HS384: 'sha384', HS512: 'sha512' };
+  const TIME_CLAIMS = ['exp', 'nbf', 'iat', 'auth_time', 'updated_at'];
+
+  function clean(token) {
+    return token.trim().replace(/^(?:authorization:\s*)?bearer\s+/i, '').replace(/\s+/g, '');
+  }
+
+  function decodeJson(part, what) {
+    let bytes;
+    try { bytes = codecs().base64Decode(part); } catch (e) { throw new Error(`${what} is not valid Base64URL: ${e.message}`); }
+    const text = codecs().text(bytes);
+    try { return JSON.parse(text); } catch (_) { throw new Error(`${what} is not valid JSON`); }
+  }
+
+  // Returns { header, payload, signature (Uint8Array), signingInput, findings, times }.
+  // findings: [{ level: 'high'|'medium'|'low'|'info', text }]
+  function decode(token, now = Date.now()) {
+    const t = clean(token);
+    const parts = t.split('.');
+    if (parts.length === 5) {
+      const header = decodeJson(parts[0], 'Header');
+      return { header, payload: null, signature: new Uint8Array(0), signingInput: '', times: [],
+        findings: [{ level: 'info', text: 'This is an encrypted JWT (JWE). Only the header can be read without the decryption key.' }] };
+    }
+    if (parts.length !== 3) throw new Error(`A JWT has 3 parts separated by dots; this has ${parts.length}`);
+
+    const header = decodeJson(parts[0], 'Header');
+    const payload = decodeJson(parts[1], 'Payload');
+    let signature;
+    try { signature = codecs().base64Decode(parts[2]); } catch (e) { throw new Error(`Signature is not valid Base64URL: ${e.message}`); }
+
+    const findings = [];
+    const add = (level, text) => findings.push({ level, text });
+    const alg = typeof header.alg === 'string' ? header.alg : '';
+
+    if (!alg) add('high', 'No "alg" in the header.');
+    else if (alg.toLowerCase() === 'none') add('high', 'alg is "none": the token is unsigned and anyone can forge it. A server that accepts it is vulnerable.');
+    else if (HMAC_ALGS[alg]) add('info', `${alg} is a shared-secret signature: anyone who knows the secret can mint tokens. Check it below if you have the secret.`);
+    else if (!/^(?:RS|PS|ES)(?:256|384|512)$|^EdDSA$/.test(alg)) add('medium', `Unusual algorithm "${alg}".`);
+
+    if (alg && alg.toLowerCase() !== 'none' && signature.length === 0) add('high', 'The signature part is empty although alg is not "none".');
+    if (alg.toLowerCase() === 'none' && signature.length > 0) add('medium', 'alg is "none" but a signature is present.');
+
+    for (const k of ['jku', 'x5u']) {
+      if (header[k]) add('medium', `Header "${k}" points to a remote key (${String(header[k])}). If the server fetches keys from it, an attacker can supply their own.`);
+    }
+    if (header.jwk) add('medium', 'Header embeds its own key ("jwk"). A server that trusts it accepts self-signed tokens.');
+    if (typeof header.kid === 'string' && /\.\.|[\/\\'";|`$]/.test(header.kid)) {
+      add('medium', `"kid" contains path or injection characters: ${header.kid}`);
+    }
+
+    const times = [];
+    for (const k of TIME_CLAIMS) {
+      if (typeof payload[k] === 'number' && Number.isFinite(payload[k])) times.push({ claim: k, seconds: payload[k], date: new Date(payload[k] * 1000) });
+    }
+    const nowS = now / 1000;
+    if (typeof payload.exp !== 'number') add('low', 'No expiry ("exp" claim): the token is valid until the key changes.');
+    else if (payload.exp < nowS) add('medium', `Expired ${ago(nowS - payload.exp)} ago.`);
+    if (typeof payload.nbf === 'number' && payload.nbf > nowS) add('medium', `Not valid yet ("nbf" is ${ago(payload.nbf - nowS)} in the future).`);
+    if (typeof payload.iat === 'number' && payload.iat > nowS + 300) add('medium', 'Issued in the future ("iat"): clock skew or a forged token.');
+    if (typeof payload.exp === 'number' && typeof payload.iat === 'number' && payload.exp - payload.iat > 30 * 86400) {
+      add('low', `Long lifetime: ${ago(payload.exp - payload.iat)} between "iat" and "exp".`);
+    }
+
+    return { header, payload, signature, signingInput: `${parts[0]}.${parts[1]}`, times, findings };
+  }
+
+  // Check an HS256/384/512 signature with a secret given as UTF-8 text or Base64.
+  // Returns true/false; throws if the algorithm is not HMAC.
+  function verifyHmac(token, secret, { secretIsBase64 = false } = {}) {
+    const t = clean(token);
+    const parts = t.split('.');
+    if (parts.length !== 3) throw new Error('Not a signed JWT');
+    const alg = decodeJson(parts[0], 'Header').alg;
+    const hashAlg = HMAC_ALGS[alg];
+    if (!hashAlg) throw new Error(`Signature check here only supports HS256/384/512, not "${alg}"`);
+    const key = secretIsBase64 ? codecs().base64Decode(secret) : codecs().utf8(secret);
+    const expected = hashes().hmac(hashAlg, key, codecs().utf8(`${parts[0]}.${parts[1]}`));
+    const actual = codecs().base64Decode(parts[2]);
+    if (expected.length !== actual.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) diff |= expected[i] ^ actual[i];
+    return diff === 0;
+  }
+
+  function ago(seconds) {
+    const s = Math.abs(Math.round(seconds));
+    if (s < 120) return `${s} seconds`;
+    if (s < 7200) return `${Math.round(s / 60)} minutes`;
+    if (s < 172800) return `${Math.round(s / 3600)} hours`;
+    if (s < 63072000) return `${Math.round(s / 86400)} days`;
+    return `${(s / 31557600).toFixed(1)} years`;
+  }
+
+  // Build an HS256/384/512 token. Used by the tests to create known samples.
+  function signHmac(header, payload, secret) {
+    const c = codecs();
+    const enc = (o) => c.base64Encode(c.utf8(JSON.stringify(o)), { urlSafe: true });
+    const input = `${enc(header)}.${enc(payload)}`;
+    const sig = hashes().hmac(HMAC_ALGS[header.alg], c.utf8(secret), c.utf8(input));
+    return `${input}.${c.base64Encode(sig, { urlSafe: true })}`;
+  }
+
+  return { decode, verifyHmac, signHmac, ago };
+});
+</script>
+<script>
+/*
+ * time.js: recognise and convert the timestamp formats analysts meet in logs
+ * and forensic artefacts.
+ *
+ * Instants are held as BigInt "ticks": 100-nanosecond units since 1970-01-01 UTC,
+ * so Windows FILETIME values keep their full precision.
+ */
+(function (root, factory) {
+  const lib = factory();
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).time = lib;
+})(globalThis, function () {
+  'use strict';
+
+  const TICKS_PER_MS = 10000n;
+  const TICKS_PER_S = 10000000n;
+  const EPOCH_1601 = 116444736000000000n;   // 1601-01-01 to 1970-01-01, in ticks
+  const EPOCH_2001_S = 978307200n;          // Cocoa / Apple epoch, in Unix seconds
+
+  const MIN = -EPOCH_1601;                  // 1601-01-01
+  const PLAUSIBLE_FROM = 0n;                // 1970-01-01
+  const PLAUSIBLE_TO = 4102444800n * TICKS_PER_S;   // 2100-01-01
+
+  // Each numeric format turns an integer into ticks.
+  const NUMERIC = [
+    { id: 'unix_s', label: 'Unix time (seconds)', toTicks: (n) => n * TICKS_PER_S },
+    { id: 'unix_ms', label: 'Unix time (milliseconds)', toTicks: (n) => n * TICKS_PER_MS },
+    { id: 'unix_us', label: 'Unix time (microseconds)', toTicks: (n) => n * 10n },
+    { id: 'unix_ns', label: 'Unix time (nanoseconds)', toTicks: (n) => n / 100n },
+    { id: 'filetime', label: 'Windows FILETIME / LDAP / AD (100 ns since 1601)', toTicks: (n) => n - EPOCH_1601 },
+    { id: 'webkit', label: 'Chrome / WebKit (µs since 1601)', toTicks: (n) => n * 10n - EPOCH_1601 },
+    { id: 'cocoa', label: 'Apple Cocoa / Mac absolute time (s since 2001)', toTicks: (n) => (n + EPOCH_2001_S) * TICKS_PER_S },
+  ];
+
+  const plausible = (ticks) => ticks >= PLAUSIBLE_FROM && ticks < PLAUSIBLE_TO;
+
+  // Returns [{ id, label, ticks, likely }] for every plausible reading of the input.
+  // "likely" means between 1995 and ten years from now; those come first.
+  function interpret(input, nowMs = Date.now()) {
+    const from = 788918400n * TICKS_PER_S;   // 1995-01-01
+    const to = (BigInt(nowMs) + 315576000000n) * TICKS_PER_MS;
+    return parse(input)
+      .map((r) => ({ ...r, likely: r.ticks >= from && r.ticks < to }))
+      .sort((a, b) => Number(b.likely) - Number(a.likely));
+  }
+
+  function parse(input) {
+    const s = input.trim().replace(/,/g, '');
+    if (!s) return [];
+    const out = [];
+
+    // Integer, possibly with a fractional part for Unix seconds (e.g. 1700000000.123).
+    let m = s.match(/^(\d{1,20})(?:\.(\d{1,9}))?$/);
+    if (m) {
+      const n = BigInt(m[1]);
+      if (m[2]) {
+        const frac = BigInt(m[2].padEnd(7, '0').slice(0, 7));
+        const ticks = n * TICKS_PER_S + frac;
+        if (plausible(ticks)) out.push({ id: 'unix_s', label: 'Unix time (seconds, with fraction)', ticks });
+        return out;
+      }
+      for (const f of NUMERIC) {
+        const ticks = f.toTicks(n);
+        if (plausible(ticks)) out.push({ id: f.id, label: f.label, ticks });
+      }
+      return out;
+    }
+
+    // FILETIME in hex: "0x01D9A8F2C3B4E500", "01D9A8F2C3B4E500" or "01D9A8F2:C3B4E500" (high:low).
+    m = s.match(/^(?:0x)?([0-9a-f]{8}):?([0-9a-f]{8})$/i);
+    if (m) {
+      const n = BigInt(`0x${m[1]}${m[2]}`);
+      const ticks = n - EPOCH_1601;
+      if (plausible(ticks)) out.push({ id: 'filetime_hex', label: 'Windows FILETIME (hex)', ticks });
+      return out;
+    }
+
+    // Date strings. A date-time without a zone is read as UTC, and the label says so.
+    let text = s;
+    let assumedUtc = false;
+    if (/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.test(s)) {
+      text = s.length === 10 ? `${s}T00:00:00Z` : `${s.replace(' ', 'T')}Z`;
+      assumedUtc = true;
+    }
+    const ms = Date.parse(text);
+    if (!Number.isNaN(ms)) {
+      let ticks = BigInt(ms) * TICKS_PER_MS;
+      // Keep sub-millisecond digits that Date.parse drops.
+      const frac = text.match(/\.(\d{4,7})/);
+      if (frac) ticks += BigInt(frac[1].padEnd(7, '0').slice(3, 7));
+      out.push({ id: 'date', label: assumedUtc ? 'Date and time (no zone given, read as UTC)' : 'Date and time', ticks });
+    }
+    return out;
+  }
+
+  function divFloor(a, b) {
+    const q = a / b;
+    return (a % b !== 0n && (a < 0n) !== (b < 0n)) ? q - 1n : q;
+  }
+
+  // ISO 8601 UTC with as many fraction digits as the value has (up to 7).
+  function toIso(ticks) {
+    const ms = divFloor(ticks, TICKS_PER_MS);
+    const extra = Number(ticks - ms * TICKS_PER_MS);   // 0..9999 sub-ms ticks
+    const iso = new Date(Number(ms)).toISOString();     // ...SS.mmmZ
+    const fraction = (iso.slice(20, 23) + String(extra).padStart(4, '0')).replace(/0+$/, '');
+    return iso.slice(0, 19) + (fraction ? `.${fraction}` : '') + 'Z';
+  }
+
+  // Every representation of an instant. Values before 1601 get no Windows forms.
+  function conversions(ticks) {
+    const unixS = divFloor(ticks, TICKS_PER_S);
+    const ft = ticks + EPOCH_1601;
+    const rows = [
+      { id: 'iso', label: 'ISO 8601 (UTC)', value: toIso(ticks) },
+      { id: 'unix_s', label: 'Unix seconds', value: String(unixS) },
+      { id: 'unix_ms', label: 'Unix milliseconds', value: String(divFloor(ticks, TICKS_PER_MS)) },
+    ];
+    if (ticks >= MIN) {
+      rows.push({ id: 'filetime', label: 'FILETIME / LDAP (decimal)', value: String(ft) });
+      rows.push({ id: 'filetime_hex', label: 'FILETIME (hex)', value: '0x' + ft.toString(16).toUpperCase().padStart(16, '0') });
+      rows.push({ id: 'webkit', label: 'Chrome / WebKit', value: String(divFloor(ft, 10n)) });
+    }
+    rows.push({ id: 'cocoa', label: 'Apple Cocoa', value: String(unixS - EPOCH_2001_S) });
+    return rows;
+  }
+
+  // "2026-10-07 14:03:12 (GMT+2)" in the given IANA zone.
+  function inZone(ticks, timeZone) {
+    const d = new Date(Number(divFloor(ticks, TICKS_PER_MS)));
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+      second: '2-digit', hourCycle: 'h23', timeZoneName: 'shortOffset', weekday: 'short',
+    }).formatToParts(d).map((p) => [p.type, p.value]));
+    return `${parts.weekday} ${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} (${parts.timeZoneName})`;
+  }
+
+  function relative(ticks, nowMs = Date.now()) {
+    const diffS = Number(divFloor(ticks, TICKS_PER_MS) - BigInt(nowMs)) / 1000;
+    const a = Math.abs(diffS);
+    const unit = a < 90 ? [a, 'seconds'] : a < 5400 ? [a / 60, 'minutes'] : a < 129600 ? [a / 3600, 'hours']
+      : a < 63072000 ? [a / 86400, 'days'] : [a / 31557600, 'years'];
+    const n = unit[0] < 10 && unit[1] === 'years' ? unit[0].toFixed(1) : Math.round(unit[0]);
+    return diffS < 0 ? `${n} ${unit[1]} ago` : `in ${n} ${unit[1]}`;
+  }
+
+  function nowTicks() { return BigInt(Date.now()) * TICKS_PER_MS; }
+
+  return { interpret, conversions, toIso, inZone, relative, nowTicks };
+});
+</script>
+<script>
+/*
+ * email.js: parse raw email headers into the facts an analyst checks first:
+ * the relay path with delays, the authentication results the receiving server
+ * recorded, sender address mismatches and the originating IP.
+ *
+ * SPF/DKIM/DMARC are NOT re-verified here (that needs DNS). We report what the
+ * receiving server wrote in Authentication-Results / Received-SPF.
+ */
+(function (root, factory) {
+  const lib = factory();
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).email = lib;
+})(globalThis, function () {
+  'use strict';
+
+  const ioc = () => globalThis.OAT.ioc;
+
+  // Unfold continuation lines and split into [{ name, value }], in original order.
+  // Stops at the first blank line after the headers (the start of the body).
+  function parseHeaders(raw) {
+    const lines = raw.replace(/\r\n?/g, '\n').split('\n');
+    const headers = [];
+    let started = false;
+    for (const line of lines) {
+      if (!line.trim()) { if (started) break; continue; }
+      if (/^[ \t]/.test(line) && headers.length) {
+        headers[headers.length - 1].value += ' ' + line.trim();
+        continue;
+      }
+      const m = line.match(/^([!-9;-~]+):\s?(.*)$/);   // printable ASCII name, no spaces or colon
+      if (m) { headers.push({ name: m[1], value: m[2].trim() }); started = true; }
+    }
+    return headers;
+  }
+
+  const get = (headers, name) => headers.filter((h) => h.name.toLowerCase() === name.toLowerCase()).map((h) => h.value);
+  const first = (headers, name) => get(headers, name)[0] || '';
+
+  // "Display Name <user@example.com>" -> { display, address, domain }
+  function parseAddress(value) {
+    if (!value) return null;
+    const angle = value.match(/<([^<>\s]+@[^<>\s]+)>/);
+    const bare = value.match(/[^\s<>"',;:()]+@[^\s<>"',;:()]+/);
+    const address = ((angle && angle[1]) || (bare && bare[0]) || '').toLowerCase();
+    if (!address) return null;
+    let display = angle ? value.slice(0, value.indexOf('<')).trim().replace(/^"|"$/g, '') : '';
+    display = display.replace(/\\"/g, '"');
+    return { display, address, domain: address.slice(address.lastIndexOf('@') + 1) };
+  }
+
+  // Rough organisational domain: last two labels, or three for "co.uk"-style suffixes.
+  function orgDomain(domain) {
+    const labels = domain.toLowerCase().split('.').filter(Boolean);
+    if (labels.length <= 2) return labels.join('.');
+    const sld = labels[labels.length - 2];
+    const tld = labels[labels.length - 1];
+    const take = tld.length === 2 && /^(?:co|com|org|net|ac|gov|edu|ne|or|go)$/.test(sld) ? 3 : 2;
+    return labels.slice(-take).join('.');
+  }
+
+  function parseReceived(value) {
+    const semi = value.lastIndexOf(';');
+    const body = semi >= 0 ? value.slice(0, semi) : value;
+    const dateText = semi >= 0 ? value.slice(semi + 1).trim() : '';
+    const ms = Date.parse(dateText.replace(/\s*\([^)]*\)\s*$/, ''));
+    const grab = (re) => { const m = body.match(re); return m ? m[1] : ''; };
+    const from = grab(/\bfrom\s+(\S+)/i);
+    const fromDetail = grab(/\bfrom\s+\S+\s+\(([^)]*)\)/i);
+    const ips = [...new Set(ioc().findAll(`${from} ${fromDetail}`).filter((m) => m.type === 'ipv4' || m.type === 'ipv6').map((m) => m.value))];
+    return {
+      from, fromDetail, ips,
+      by: grab(/\bby\s+(\S+)/i),
+      with: grab(/\bwith\s+(\S+)/i),
+      date: Number.isNaN(ms) ? null : new Date(ms),
+      raw: value,
+    };
+  }
+
+  // Authentication-Results: "mx.example.com; spf=pass smtp.mailfrom=a.com; dkim=fail header.d=b.com"
+  function parseAuthResults(value, source) {
+    const out = [];
+    const re = /\b(spf|dkim|dmarc|arc|compauth|bimi)\s*=\s*([a-z]+)([^;]*)/gi;
+    let m;
+    while ((m = re.exec(value))) {
+      const detail = m[3].replace(/\s*\([^)]*\)/g, '').trim();
+      out.push({ method: m[1].toLowerCase(), result: m[2].toLowerCase(), detail, source });
+    }
+    return out;
+  }
+
+  function analyze(raw) {
+    const headers = parseHeaders(raw);
+    const findings = [];
+    const add = (level, text) => findings.push({ level, text });
+
+    const from = parseAddress(first(headers, 'From'));
+    const replyTo = parseAddress(first(headers, 'Reply-To'));
+    const returnPath = parseAddress(first(headers, 'Return-Path'));
+    const sender = parseAddress(first(headers, 'Sender'));
+    const messageId = first(headers, 'Message-ID');
+
+    // ------------------------------------------------ Relay path (oldest hop first)
+    const hops = get(headers, 'Received').map(parseReceived).reverse();
+    hops.forEach((hop, i) => {
+      const prev = hops[i - 1];
+      hop.delay = prev && prev.date && hop.date ? Math.round((hop.date - prev.date) / 1000) : null;
+      if (hop.delay !== null && hop.delay < -60) add('low', `Hop ${i + 1} is timestamped ${-hop.delay}s before the previous hop (clock skew, or a forged Received header).`);
+      if (hop.delay !== null && hop.delay > 3600) add('info', `Hop ${i + 1} took ${Math.round(hop.delay / 60)} minutes.`);
+    });
+
+    // ------------------------------------------------ Originating IP
+    let originatingIp = '';
+    let originatingSource = '';
+    for (const name of ['X-Originating-IP', 'X-Sender-IP', 'X-Source-IP']) {
+      const v = first(headers, name);
+      const ip = v && ioc().findAll(v).find((m) => m.type === 'ipv4' || m.type === 'ipv6');
+      if (ip) { originatingIp = ip.value; originatingSource = name; break; }
+    }
+    if (!originatingIp) {
+      for (const hop of hops) {
+        const pub = hop.ips.find((ip) => ioc().ipScope(ip) === 'public');
+        if (pub) { originatingIp = pub; originatingSource = 'first Received hop with a public IP'; break; }
+      }
+    }
+
+    // ------------------------------------------------ Authentication
+    const auth = [
+      ...get(headers, 'Authentication-Results').flatMap((v) => parseAuthResults(v, 'Authentication-Results')),
+      ...get(headers, 'ARC-Authentication-Results').flatMap((v) => parseAuthResults(v, 'ARC-Authentication-Results')),
+    ];
+    for (const v of get(headers, 'Received-SPF')) {
+      const m = v.match(/^\s*([a-z]+)/i);
+      if (m) auth.push({ method: 'spf', result: m[1].toLowerCase(), detail: v.slice(m[0].length).trim(), source: 'Received-SPF' });
+    }
+    const primary = auth.filter((a) => a.source !== 'ARC-Authentication-Results');
+    for (const method of ['spf', 'dkim', 'dmarc']) {
+      const results = primary.filter((a) => a.method === method).map((a) => a.result);
+      if (!results.length) continue;
+      if (results.some((r) => ['fail', 'softfail', 'permerror', 'temperror'].includes(r))) {
+        add(method === 'dmarc' ? 'high' : 'medium', `${method.toUpperCase()} ${results.find((r) => r !== 'pass')} recorded by the receiving server.`);
+      } else if (results.every((r) => r === 'none' || r === 'neutral')) {
+        add('low', `${method.toUpperCase()} result is "${results[0]}": the sender domain does not protect itself with ${method.toUpperCase()}.`);
+      }
+    }
+    if (!auth.length) add('info', 'No Authentication-Results or Received-SPF headers found. The receiving server may not record them, or they were stripped.');
+
+    // ------------------------------------------------ Address mismatches
+    if (from) {
+      if (replyTo && orgDomain(replyTo.domain) !== orgDomain(from.domain)) {
+        add('high', `Reply-To domain (${replyTo.domain}) differs from From domain (${from.domain}): replies go somewhere else.`);
+      }
+      if (returnPath && orgDomain(returnPath.domain) !== orgDomain(from.domain)) {
+        add('medium', `Return-Path domain (${returnPath.domain}) differs from From domain (${from.domain}). Common for mailing services, also for spoofing.`);
+      }
+      const inDisplay = from.display.match(/[^\s<>"']+@[^\s<>"']+/);
+      if (inDisplay && inDisplay[0].toLowerCase() !== from.address) {
+        add('high', `Display name shows a different address ("${inDisplay[0]}") than the real sender (${from.address}).`);
+      }
+      const midDomain = (messageId.match(/@([^>\s]+)/) || [])[1];
+      if (midDomain && orgDomain(midDomain) !== orgDomain(from.domain)) {
+        add('info', `Message-ID domain (${midDomain}) differs from From domain (${from.domain}).`);
+      }
+      if (sender && orgDomain(sender.domain) !== orgDomain(from.domain)) {
+        add('low', `Sender header (${sender.address}) differs from From (${from.address}).`);
+      }
+    } else {
+      add('medium', 'No parseable From header.');
+    }
+
+    const order = { high: 0, medium: 1, low: 2, info: 3 };
+    findings.sort((a, b) => order[a.level] - order[b.level]);
+
+    return {
+      headers,
+      summary: {
+        from, replyTo, returnPath, sender,
+        to: first(headers, 'To'),
+        subject: first(headers, 'Subject'),
+        date: first(headers, 'Date'),
+        messageId,
+        mailer: first(headers, 'X-Mailer') || first(headers, 'User-Agent'),
+        originatingIp, originatingSource,
+      },
+      hops, auth, findings,
+    };
+  }
+
+  return { parseHeaders, parseAddress, orgDomain, analyze };
+});
+</script>
+<script>
+/*
+ * lookup.js: reputation-site links for an indicator. The toolkit only builds the
+ * links; the analyst decides whether to click (which sends the indicator to that site).
+ */
+(function (root, factory) {
+  const lib = factory();
+  if (typeof module === 'object' && module.exports) module.exports = lib;
+  else (root.OAT = root.OAT || {}).lookup = lib;
+})(globalThis, function () {
+  'use strict';
+
+  const e = encodeURIComponent;
+
+  const SERVICES = {
+    ipv4: [
+      ['VirusTotal', (v) => `https://www.virustotal.com/gui/ip-address/${e(v)}`],
+      ['AbuseIPDB', (v) => `https://www.abuseipdb.com/check/${e(v)}`],
+      ['Shodan', (v) => `https://www.shodan.io/host/${e(v)}`],
+      ['urlscan', (v) => `https://urlscan.io/ip/${e(v)}`],
+    ],
+    domain: [
+      ['VirusTotal', (v) => `https://www.virustotal.com/gui/domain/${e(v)}`],
+      ['urlscan', (v) => `https://urlscan.io/domain/${e(v)}`],
+      ['URLhaus', (v) => `https://urlhaus.abuse.ch/browse.php?search=${e(v)}`],
+      ['Shodan', (v) => `https://www.shodan.io/search?query=${e(`hostname:${v}`)}`],
+    ],
+    url: [
+      ['VirusTotal', (v) => `https://www.virustotal.com/gui/search/${e(e(v))}`],
+      ['URLhaus', (v) => `https://urlhaus.abuse.ch/browse.php?search=${e(v)}`],
+      ['urlscan (search)', (v) => `https://urlscan.io/search/#${e(`page.url:"${v}"`)}`],
+    ],
+    hash: [
+      ['VirusTotal', (v) => `https://www.virustotal.com/gui/file/${e(v)}`],
+      ['MalwareBazaar', (v) => `https://bazaar.abuse.ch/browse.php?search=${e(`${v.length === 64 ? 'sha256' : v.length === 40 ? 'sha1' : 'md5'}:${v}`)}`],
+    ],
+    cve: [
+      ['NVD', (v) => `https://nvd.nist.gov/vuln/detail/${e(v)}`],
+      ['CISA KEV', (v) => `https://www.cisa.gov/known-exploited-vulnerabilities-catalog?search_api_fulltext=${e(v)}`],
+    ],
+    mitre: [
+      ['MITRE ATT&CK', (v) => `https://attack.mitre.org/techniques/${v.replace('.', '/')}/`],
+    ],
+  };
+  SERVICES.ipv6 = SERVICES.ipv4.filter(([name]) => name !== 'urlscan');
+  SERVICES.md5 = SERVICES.hash;
+  SERVICES.sha1 = SERVICES.hash;
+  SERVICES.sha256 = SERVICES.hash;
+  SERVICES.sha512 = [SERVICES.hash[0]];
+  SERVICES.email = [];
+
+  // [{ name, url }] for an indicator of the given type. Only https links are produced.
+  function linksFor(type, value) {
+    return (SERVICES[type] || []).map(([name, make]) => ({ name, url: make(value) }));
+  }
+
+  return { linksFor };
+});
+</script>
+<!-- Modules appear in the sidebar in this order -->
+<script>
+/*
+ * Encode / Decode module: build a recipe of byte-level steps (Base64, hex, URL,
+ * HTML entities, ROT13, binary, Unicode escapes, UTF-16LE). Runs live as you type.
+ * Auto-detect looks at the current output and suggests the next decode steps.
+ */
+(function () {
+  'use strict';
+
+  const C = window.OAT.codecs;
+  const DISPLAY_LIMIT = 1024 * 1024;   // characters shown in Text view; copy/download use everything
+
+  window.OAT.register({
+    id: 'encode',
+    name: 'Encode / Decode',
+    summary: 'Base64, hex, URL, HTML entities, ROT13, binary, Unicode escapes and UTF-16LE. Chain steps into a recipe; auto-detect suggests what to decode next.',
+
+    render(root, ctx) {
+      const { h } = ctx;
+
+      const state = {
+        fileBytes: null,     // set when a file is loaded; overrides the text box
+        fileName: null,
+        steps: [],           // op ids
+        view: 'text',        // 'text' | 'hex'
+        output: new Uint8Array(0),
+      };
+
+      // ---------------------------------------------------------- Input
+
+      const input = h('textarea', {
+        class: 'io', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Input',
+        placeholder: 'Paste or type data here, or drop a file',
+      });
+      const fileInput = h('input', { type: 'file', hidden: true, 'aria-hidden': 'true' });
+      const fileChip = h('span', { class: 'chip', hidden: true });
+      const inputMeta = h('span', { class: 'meta' });
+
+      const inputPanel = h('div', { class: 'panel' },
+        h('div', { class: 'panel-head' },
+          h('h2', { class: 'panel-title' }, 'Input'),
+          h('div', { class: 'row' },
+            fileChip,
+            inputMeta,
+            h('button', { type: 'button', class: 'btn btn-small', onclick: () => fileInput.click() }, 'Open file…'),
+            h('button', { type: 'button', class: 'btn btn-small', onclick: clearAll }, 'Clear'))),
+        input,
+        fileInput);
+
+      // ---------------------------------------------------------- Recipe
+
+      const stepList = h('ol', { class: 'steps', 'aria-label': 'Recipe steps' });
+      const stepsEmpty = h('p', { class: 'steps-empty' }, 'No steps yet. Add one below, or pick an auto-detect suggestion.');
+      const addSelect = opSelect('', 'Add step…');
+      addSelect.setAttribute('aria-label', 'Add a step');
+      addSelect.addEventListener('change', () => {
+        if (addSelect.value) { state.steps.push(addSelect.value); addSelect.value = ''; renderSteps(); run(); }
+      });
+
+      const quick = ['b64-decode', 'hex-decode', 'url-decode', 'b64-encode'].map((id) =>
+        h('button', { type: 'button', class: 'btn btn-small', onclick: () => { state.steps.push(id); renderSteps(); run(); } },
+          `+ ${C.OP_BY_ID[id].label}`));
+
+      const recipePanel = h('div', { class: 'panel' },
+        h('div', { class: 'panel-head' },
+          h('h2', { class: 'panel-title' }, 'Recipe'),
+          h('button', { type: 'button', class: 'btn btn-small', onclick: () => { state.steps = []; renderSteps(); run(); } }, 'Clear steps')),
+        stepsEmpty,
+        stepList,
+        h('div', { class: 'row' }, addSelect, quick));
+
+      // ---------------------------------------------------------- Suggestions
+
+      const suggestionList = h('div', { class: 'suggestions' });
+      const suggestPanel = h('div', { class: 'panel', hidden: true },
+        h('div', { class: 'panel-head' },
+          h('h2', { class: 'panel-title' }, 'Auto-detect'),
+          h('span', { class: 'meta' }, 'Looks like… (click to add as steps)')),
+        suggestionList);
+
+      // ---------------------------------------------------------- Output
+
+      const output = h('pre', { class: 'output', tabindex: '0', 'aria-label': 'Output', 'aria-live': 'polite', 'data-empty': 'Output appears here' });
+      const outputMeta = h('span', { class: 'meta' });
+      const outputNotice = h('p', { class: 'notice', hidden: true });
+
+      const viewText = h('button', { type: 'button', 'aria-pressed': 'true', onclick: () => setView('text') }, 'Text');
+      const viewHex = h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => setView('hex') }, 'Hex');
+
+      const sendSelect = h('select', { 'aria-label': 'Send output to another module' });
+      sendSelect.addEventListener('change', () => {
+        if (sendSelect.value) { ctx.sendTo(sendSelect.value, C.text(state.output)); sendSelect.value = ''; }
+      });
+
+      const outputPanel = h('div', { class: 'panel' },
+        h('div', { class: 'panel-head' },
+          h('div', { class: 'row' },
+            h('h2', { class: 'panel-title' }, 'Output'),
+            h('span', { class: 'seg', role: 'group', 'aria-label': 'Output view' }, viewText, viewHex),
+            outputMeta),
+          h('div', { class: 'row' },
+            h('button', { type: 'button', class: 'btn btn-small', onclick: copyOutput }, 'Copy'),
+            h('button', { type: 'button', class: 'btn btn-small', onclick: downloadOutput }, 'Download'),
+            sendSelect,
+            h('button', { type: 'button', class: 'btn btn-small', title: 'Use the output as the new input and clear the recipe', onclick: outputToInput }, 'Use as input'))),
+        outputNotice,
+        output);
+
+      root.append(inputPanel, recipePanel, suggestPanel, outputPanel);
+
+      // ---------------------------------------------------------- Behaviour
+
+      function opSelect(value, placeholder) {
+        const sel = h('select', null);
+        if (placeholder) sel.append(h('option', { value: '' }, placeholder));
+        for (const group of ['Decode', 'Encode', 'Other']) {
+          const og = h('optgroup', { label: group });
+          for (const op of C.OPS.filter((o) => o.group === group)) og.append(h('option', { value: op.id }, op.label));
+          sel.append(og);
+        }
+        sel.value = value;
+        return sel;
+      }
+
+      function renderSteps(results = []) {
+        stepList.replaceChildren();
+        stepsEmpty.hidden = state.steps.length > 0;
+        state.steps.forEach((id, i) => {
+          const sel = opSelect(id);
+          sel.setAttribute('aria-label', `Step ${i + 1} operation`);
+          sel.addEventListener('change', () => { state.steps[i] = sel.value; run(); });
+          const r = results[i];
+          const status = h('span', { class: 'step-status' });
+          if (r && r.ok) { status.classList.add('ok'); status.textContent = `${formatSize(r.bytes.length)}`; }
+          else if (r && !r.ok) { status.classList.add('err'); status.textContent = r.error; }
+          else if (results.length) { status.textContent = 'not run'; }
+          stepList.append(h('li', { class: 'step' },
+            sel,
+            h('button', { type: 'button', class: 'btn btn-small', 'aria-label': `Move step ${i + 1} up`, disabled: i === 0, onclick: () => moveStep(i, -1) }, '↑'),
+            h('button', { type: 'button', class: 'btn btn-small', 'aria-label': `Remove step ${i + 1}`, onclick: () => { state.steps.splice(i, 1); renderSteps(); run(); } }, '✕'),
+            status));
+        });
+      }
+
+      function moveStep(i, delta) {
+        const j = i + delta;
+        if (j < 0 || j >= state.steps.length) return;
+        [state.steps[i], state.steps[j]] = [state.steps[j], state.steps[i]];
+        renderSteps();
+        run();
+      }
+
+      function inputBytes() {
+        return state.fileBytes || C.utf8(input.value);
+      }
+
+      function run() {
+        const src = inputBytes();
+        const results = C.runRecipe(src, state.steps);
+        renderSteps(results);
+
+        const failed = results.find((r) => !r.ok);
+        const lastGood = [...results].reverse().find((r) => r.ok);
+        state.output = lastGood ? lastGood.bytes : src;
+
+        if (failed) {
+          const n = results.indexOf(failed) + 1;
+          outputNotice.textContent = `Step ${n} failed: ${failed.error}. ${n > 1 ? `Showing the output of step ${n - 1}.` : 'Showing the input unchanged.'}`;
+          outputNotice.hidden = false;
+        } else {
+          outputNotice.hidden = true;
+        }
+
+        renderOutput();
+        renderSuggestions();
+        refreshSendTargets();
+      }
+
+      function renderOutput() {
+        const bytes = state.output;
+        const printable = C.printableRatio(bytes);
+        const kind = C.sniff(bytes);
+        outputMeta.textContent = bytes.length
+          ? `${formatSize(bytes.length)}${kind ? ` · ${kind}` : printable < 0.85 ? ' · looks binary' : ''}`
+          : '';
+        if (state.view === 'hex') {
+          output.classList.add('hexview');
+          const dump = C.hexdump(bytes);
+          output.textContent = bytes.length > 65536 ? `${dump}\n… (hex view shows the first 64 KB)` : dump;
+        } else {
+          output.classList.remove('hexview');
+          const t = C.text(bytes);
+          output.textContent = t.length > DISPLAY_LIMIT ? `${t.slice(0, DISPLAY_LIMIT)}\n… (display truncated; Copy and Download include everything)` : t;
+        }
+      }
+
+      function renderSuggestions() {
+        // Only suggest for text-sized output; detection on huge binary is pointless.
+        const bytes = state.output;
+        const list = bytes.length && bytes.length < 5 * 1024 * 1024 ? C.detect(C.text(bytes)) : [];
+        suggestionList.replaceChildren(...list.map((s) =>
+          h('button', {
+            type: 'button', class: 'suggestion',
+            onclick: () => { state.steps.push(...s.ops); renderSteps(); run(); },
+          },
+          h('span', { class: 'suggestion-label' }, s.label),
+          h('span', { class: 'suggestion-score' }, `${Math.round(Math.min(s.score, 1) * 100)}% confidence`),
+          h('span', { class: 'suggestion-preview' }, s.preview))));
+        suggestPanel.hidden = list.length === 0;
+      }
+
+      function refreshSendTargets() {
+        const targets = ctx.sendTargets();
+        sendSelect.replaceChildren(h('option', { value: '' }, targets.length ? 'Send to…' : 'Send to… (more modules soon)'),
+          ...targets.map((t) => h('option', { value: t.id }, t.name)));
+        sendSelect.disabled = targets.length === 0;
+      }
+
+      function setView(v) {
+        state.view = v;
+        viewText.setAttribute('aria-pressed', String(v === 'text'));
+        viewHex.setAttribute('aria-pressed', String(v === 'hex'));
+        renderOutput();
+      }
+
+      function copyOutput() {
+        ctx.copy(state.view === 'hex' ? C.hexdump(state.output, Infinity) : C.text(state.output));
+      }
+
+      function downloadOutput() {
+        const isText = C.printableRatio(state.output) >= 0.85;
+        ctx.download(isText ? 'output.txt' : 'output.bin', state.output, isText ? 'text/plain;charset=utf-8' : 'application/octet-stream');
+      }
+
+      function outputToInput() {
+        const bytes = state.output;
+        state.steps = [];
+        if (C.printableRatio(bytes) >= 0.85) setText(C.text(bytes));
+        else setFile(bytes, 'previous output');
+        renderSteps();
+        run();
+      }
+
+      function setText(value) {
+        clearFile();
+        input.value = value;
+      }
+
+      function setFile(bytes, name) {
+        state.fileBytes = bytes;
+        state.fileName = name;
+        input.value = '';
+        input.disabled = true;
+        input.placeholder = 'Using file input. Remove the file to type again.';
+        fileChip.replaceChildren(`File: ${name} (${formatSize(bytes.length)})`,
+          h('button', { type: 'button', class: 'btn btn-ghost btn-small', 'aria-label': 'Remove file', onclick: () => { clearFile(); run(); } }, '✕'));
+        fileChip.hidden = false;
+      }
+
+      function clearFile() {
+        state.fileBytes = null;
+        state.fileName = null;
+        input.disabled = false;
+        input.placeholder = 'Paste or type data here, or drop a file';
+        fileChip.hidden = true;
+        updateInputMeta();
+      }
+
+      function clearAll() {
+        clearFile();
+        input.value = '';
+        updateInputMeta();
+        run();
+        input.focus();
+      }
+
+      async function loadFile(file) {
+        if (!file) return;
+        if (file.size > 200 * 1024 * 1024) {
+          ctx.toast('File is over 200 MB; too large for in-page decoding');
+          return;
+        }
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        setFile(bytes, file.name);
+        updateInputMeta();
+        run();
+      }
+
+      function updateInputMeta() {
+        inputMeta.textContent = state.fileBytes ? '' : input.value ? `${formatSize(C.utf8(input.value).length)}` : '';
+      }
+
+      let timer = null;
+      input.addEventListener('input', () => {
+        updateInputMeta();
+        clearTimeout(timer);
+        timer = setTimeout(run, 120);
+      });
+
+      fileInput.addEventListener('change', () => { loadFile(fileInput.files[0]); fileInput.value = ''; });
+
+      // Drop a file anywhere on the input panel.
+      inputPanel.addEventListener('dragover', (e) => { e.preventDefault(); input.classList.add('dragover'); });
+      inputPanel.addEventListener('dragleave', () => input.classList.remove('dragover'));
+      inputPanel.addEventListener('drop', (e) => {
+        e.preventDefault();
+        input.classList.remove('dragover');
+        const file = e.dataTransfer && e.dataTransfer.files[0];
+        if (file) loadFile(file);
+      });
+
+      renderSteps();
+      run();
+
+      return {
+        receive(value) { state.steps = []; setText(value); updateInputMeta(); renderSteps(); run(); },
+        focus() { if (!input.disabled) input.focus(); },
+      };
+    },
+  });
+
+  function formatSize(n) {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  }
+})();
+</script>
+<script>
+/*
+ * Hashing module: MD5 / SHA-1 / SHA-256 / SHA-384 / SHA-512 of text or files.
+ * Files are read in 4 MB chunks inside a Web Worker (built from an inline blob,
+ * so it also works when the page is opened from file://). If a worker cannot
+ * start, hashing falls back to the main thread with the same chunking.
+ */
+(function () {
+  'use strict';
+
+  const H = window.OAT.hashes;
+  const C = window.OAT.codecs;
+  const ALGS = ['md5', 'sha1', 'sha256', 'sha384', 'sha512'];
+  const DEFAULT_ON = new Set(['md5', 'sha1', 'sha256', 'sha512']);
+  const CHUNK = 4 * 1024 * 1024;
+
+  const WORKER_SOURCE = `'use strict';
+const H = ${H.factorySource}();
+self.onmessage = async (e) => {
+  const { file, algs, chunk } = e.data;
+  try {
+    const hashers = algs.map((a) => H.createHash(a));
+    for (let off = 0; off < file.size; off += chunk) {
+      const buf = new Uint8Array(await file.slice(off, off + chunk).arrayBuffer());
+      for (const h of hashers) h.update(buf);
+      self.postMessage({ type: 'progress', done: Math.min(off + chunk, file.size) });
+    }
+    self.postMessage({ type: 'done', results: hashers.map((h) => [h.algorithm, H.toHex(h.digest())]) });
+  } catch (err) {
+    self.postMessage({ type: 'error', message: String(err && err.message || err) });
+  }
+};`;
+
+  let workerUrl = null;
+  function getWorkerUrl() {
+    if (!workerUrl) workerUrl = URL.createObjectURL(new Blob([WORKER_SOURCE], { type: 'text/javascript' }));
+    return workerUrl;
+  }
+
+  // Hash a File. Returns { promise, cancel }. promise resolves to { results: [[alg, hex]], mode }.
+  function hashFile(file, algs, onProgress) {
+    let cancelled = false;
+    let worker = null;
+
+    const mainThread = async () => {
+      const hashers = algs.map((a) => H.createHash(a));
+      for (let off = 0; off < file.size; off += CHUNK) {
+        if (cancelled) throw new Error('Cancelled');
+        const buf = new Uint8Array(await file.slice(off, off + CHUNK).arrayBuffer());
+        for (const h of hashers) h.update(buf);
+        onProgress(Math.min(off + CHUNK, file.size));
+        await new Promise((r) => setTimeout(r, 0));   // keep the page responsive
+      }
+      return { results: hashers.map((h) => [h.algorithm, H.toHex(h.digest())]), mode: 'main thread' };
+    };
+
+    let rejectPromise = null;
+    const promise = new Promise((resolve, reject) => {
+      rejectPromise = reject;
+      let started = false;
+      const fallback = () => { if (worker) worker.terminate(); worker = null; mainThread().then(resolve, reject); };
+      try {
+        worker = new Worker(getWorkerUrl());
+      } catch (_) {
+        fallback();
+        return;
+      }
+      worker.onmessage = (e) => {
+        const m = e.data;
+        if (m.type === 'progress') { started = true; onProgress(m.done); }
+        else if (m.type === 'done') { worker.terminate(); resolve({ results: m.results, mode: 'Web Worker' }); }
+        else if (m.type === 'error') { worker.terminate(); reject(new Error(m.message)); }
+      };
+      worker.onerror = (e) => {
+        e.preventDefault();
+        if (!started && !cancelled) fallback();
+        else { worker.terminate(); reject(new Error(e.message || 'Worker error')); }
+      };
+      worker.postMessage({ file, algs, chunk: CHUNK });
+    });
+
+    return {
+      promise,
+      cancel() {
+        cancelled = true;
+        if (worker) { worker.terminate(); rejectPromise(new Error('Cancelled')); }
+        // On the main-thread path the loop sees `cancelled` and rejects itself.
+      },
+    };
+  }
+
+  window.OAT.register({
+    id: 'hash',
+    name: 'Hashing',
+    summary: 'MD5, SHA-1, SHA-256, SHA-384 and SHA-512 of text or files of any size. Files are read in chunks on your machine and never uploaded.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+      const state = { textResults: [], files: [], upper: false };
+
+      // ---------------------------------------------------------- Options
+
+      const algBoxes = Object.fromEntries(ALGS.map((a) => [a, h('input', { type: 'checkbox', checked: DEFAULT_ON.has(a) })]));
+      const upperBox = h('input', { type: 'checkbox' });
+      const options = h('div', { class: 'row options' },
+        ALGS.map((a) => h('label', { class: 'check' }, algBoxes[a], H.NAMES[a])),
+        h('span', { class: 'sep' }),
+        h('label', { class: 'check' }, upperBox, 'Uppercase'));
+      const selectedAlgs = () => ALGS.filter((a) => algBoxes[a].checked);
+
+      // ---------------------------------------------------------- Compare
+
+      const compareInput = h('input', { type: 'text', class: 'input mono', placeholder: 'Paste a known hash to compare (any of the above)', 'aria-label': 'Hash to compare', spellcheck: 'false' });
+      const compareStatus = h('span', { class: 'meta' });
+
+      // ---------------------------------------------------------- Text
+
+      const textInput = ui.textarea('Type or paste text to hash (hashed as UTF-8)', 'Text to hash', { rows: '4' });
+      const textResults = h('div');
+      const textMeta = h('span', { class: 'meta' });
+
+      // ---------------------------------------------------------- Files
+
+      const fileInput = h('input', { type: 'file', multiple: true, hidden: true });
+      const dropZone = h('div', { class: 'dropzone', tabindex: '0', role: 'button', 'aria-label': 'Choose files to hash' },
+        h('strong', null, 'Drop files here'), ' or click to choose. Any size; read in chunks, nothing is uploaded.');
+      const fileList = h('div', { class: 'file-jobs' });
+
+      root.append(
+        ui.panel('Algorithms', null, options),
+        ui.panel('Text', textMeta, textInput, textResults),
+        ui.panel('Files', ui.button('Clear finished', clearFinished), dropZone, fileInput, fileList),
+        ui.panel('Compare', compareStatus, compareInput));
+
+      // ---------------------------------------------------------- Rendering
+
+      const fmt = (hex) => (state.upper ? hex.toUpperCase() : hex);
+
+      function resultTable(results, label) {
+        return ui.table(['Algorithm', 'Hash', ''], results.map(([alg, hex]) => [
+          H.NAMES[alg],
+          h('code', { class: 'hash', dataset: { hash: hex } }, fmt(hex)),
+          ui.copyButton(() => fmt(hex)),
+        ]), { 'aria-label': label });
+      }
+
+      function allHashesText() {
+        const lines = state.textResults.map(([alg, hex]) => `${H.NAMES[alg]}  ${fmt(hex)}  (text)`);
+        for (const job of state.files) {
+          if (job.results) for (const [alg, hex] of job.results) lines.push(`${H.NAMES[alg]}  ${fmt(hex)}  ${job.file.name}`);
+        }
+        return lines.join('\n');
+      }
+
+      function hashValuesOnly() {
+        const set = new Set(state.textResults.map(([, hex]) => hex));
+        for (const job of state.files) if (job.results) job.results.forEach(([, hex]) => set.add(hex));
+        return [...set].join('\n');
+      }
+
+      function runText() {
+        const value = textInput.value;
+        if (!value) { state.textResults = []; textResults.replaceChildren(); textMeta.textContent = ''; compare(); return; }
+        const bytes = C.utf8(value);
+        state.textResults = selectedAlgs().map((a) => [a, H.toHex(H.hash(a, bytes))]);
+        textMeta.textContent = `${bytes.length} bytes`;
+        textResults.replaceChildren(resultTable(state.textResults, 'Text hashes'),
+          h('div', { class: 'row actions' }, ui.copyButton(allHashesText, 'Copy all'), ui.sendSelect(hashValuesOnly)));
+        compare();
+      }
+
+      function addFiles(files) {
+        const algs = selectedAlgs();
+        if (!algs.length) { ctx.toast('Pick at least one algorithm'); return; }
+        for (const file of files) {
+          const job = { file, algs, results: null, error: null, done: false, el: h('div', { class: 'file-job' }) };
+          state.files.push(job);
+          fileList.append(job.el);
+        }
+        pump();
+      }
+
+      // One file at a time keeps memory and CPU use predictable.
+      let busy = false;
+      async function pump() {
+        if (busy) return;
+        const job = state.files.find((j) => !j.done && !j.running);
+        if (!job) return;
+        busy = true;
+        job.running = true;
+        const started = performance.now();
+        const bar = h('progress', { max: String(job.file.size || 1), value: '0' });
+        const pct = h('span', { class: 'meta' }, '0%');
+        const task = hashFile(job.file, job.algs, (done) => {
+          bar.value = done;
+          pct.textContent = `${Math.floor((done / (job.file.size || 1)) * 100)}%`;
+        });
+        job.cancel = task.cancel;
+        renderJob(job, h('div', { class: 'row' }, bar, pct, ui.button('Cancel', () => task.cancel())));
+        try {
+          const { results, mode } = await task.promise;
+          job.results = results;
+          job.mode = mode;
+          job.seconds = (performance.now() - started) / 1000;
+        } catch (e) {
+          job.error = e.message;
+        }
+        job.done = true;
+        job.running = false;
+        renderJob(job);
+        compare();
+        busy = false;
+        pump();
+      }
+
+      function renderJob(job, progress) {
+        const head = h('div', { class: 'file-job-head' },
+          h('strong', null, job.file.name),
+          h('span', { class: 'meta' }, formatSize(job.file.size)),
+          job.done && job.results ? h('span', { class: 'meta' }, `${job.seconds.toFixed(1)} s · ${job.mode}`) : null);
+        const body = [];
+        if (progress) body.push(progress);
+        if (job.error) body.push(h('p', { class: 'error' }, job.error === 'Cancelled' ? 'Cancelled.' : `Failed: ${job.error}`));
+        if (job.results) {
+          body.push(resultTable(job.results, `Hashes of ${job.file.name}`));
+          body.push(h('div', { class: 'row actions' }, ui.copyButton(allHashesText, 'Copy all'), ui.sendSelect(hashValuesOnly)));
+        }
+        if (!job.done && !progress) body.push(h('p', { class: 'meta' }, 'Waiting…'));
+        job.el.replaceChildren(head, ...body);
+      }
+
+      function clearFinished() {
+        state.files = state.files.filter((j) => {
+          if (j.done) j.el.remove();
+          return !j.done;
+        });
+      }
+
+      // Highlight any hash equal to the one pasted in Compare.
+      function compare() {
+        const want = compareInput.value.trim().toLowerCase().replace(/^0x/, '');
+        let hits = 0;
+        for (const code of root.querySelectorAll('code.hash')) {
+          const match = want && code.dataset.hash === want;
+          code.classList.toggle('match', Boolean(match));
+          if (match) hits++;
+        }
+        if (!want) compareStatus.textContent = '';
+        else if (!/^[0-9a-f]+$/.test(want)) compareStatus.textContent = 'Not a hex hash';
+        else compareStatus.textContent = hits ? `✓ Match (${hits})` : '✗ No match';
+        compareStatus.className = want ? (hits ? 'meta ok' : 'meta err') : 'meta';
+      }
+
+      function rerenderAll() {
+        state.upper = upperBox.checked;
+        runText();
+        state.files.filter((j) => j.done).forEach((j) => renderJob(j));
+        compare();
+      }
+
+      // ---------------------------------------------------------- Events
+
+      textInput.addEventListener('input', ui.debounce(runText, 120));
+      for (const box of Object.values(algBoxes)) box.addEventListener('change', runText);
+      upperBox.addEventListener('change', rerenderAll);
+      compareInput.addEventListener('input', compare);
+      dropZone.addEventListener('click', () => fileInput.click());
+      dropZone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+      fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
+      ui.onFileDrop(dropZone, addFiles);
+
+      return {
+        receive(text) { textInput.value = text; runText(); },
+        focus() { textInput.focus(); },
+      };
+    },
+  });
+
+  function formatSize(n) {
+    if (n < 1024) return `${n} B`;
+    if (n < 1048576) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1073741824) return `${(n / 1048576).toFixed(1)} MB`;
+    return `${(n / 1073741824).toFixed(2)} GB`;
+  }
+})();
+</script>
+<script>
+/*
+ * IOC Extractor module: pull indicators out of pasted text or a log file,
+ * dedupe and count them, filter, and export as text, CSV or JSON.
+ */
+(function () {
+  'use strict';
+
+  const I = window.OAT.ioc;
+  const AUTO_LIMIT = 1024 * 1024;   // above this many characters, extraction waits for a click
+
+  window.OAT.register({
+    id: 'ioc',
+    name: 'IOC Extractor',
+    summary: 'Pull IPs, domains, URLs, emails, hashes, CVE IDs and ATT&CK technique IDs from text or a log. Defanged input is refanged first.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+      let items = [];
+      const hiddenTypes = new Set();
+
+      const input = ui.textarea('Paste a log, alert, email or report, or drop a text file', 'Text to extract from');
+      const inputMeta = h('span', { class: 'meta' });
+      const runBtn = h('button', { type: 'button', class: 'btn btn-primary btn-small', hidden: true, onclick: run }, 'Extract');
+      const fileInput = h('input', { type: 'file', hidden: true });
+
+      const opt = (label, checked = false) => {
+        const box = h('input', { type: 'checkbox', checked });
+        return { box, el: h('label', { class: 'check' }, box, label) };
+      };
+      const optRefang = opt('Refang input first', true);
+      const optHidePrivate = opt('Hide private and reserved IPs');
+      const optFileLike = opt('Include file-like domains (.zip, .mov, .py…)');
+      const optDefang = opt('Defang output');
+
+      const typeFilters = h('div', { class: 'row type-filters', role: 'group', 'aria-label': 'Show types' });
+      const results = h('div');
+      const resultMeta = h('span', { class: 'meta' });
+
+      const inputPanel = ui.panel('Input', [inputMeta, runBtn, ui.button('Open file…', () => fileInput.click()), ui.button('Clear', () => { input.value = ''; run(); })],
+        input, fileInput,
+        h('div', { class: 'row options' }, optRefang.el, optHidePrivate.el, optFileLike.el, optDefang.el));
+      const resultPanel = ui.panel('Indicators', [resultMeta,
+        ui.copyButton(() => visible().map(display).join('\n'), 'Copy'),
+        ui.button('CSV', exportCsv), ui.button('JSON', exportJson),
+        ui.sendSelect(() => visible().map(display).join('\n'))],
+        typeFilters, results);
+      root.append(inputPanel, resultPanel);
+
+      // ---------------------------------------------------------- Logic
+
+      const display = (it) => (optDefang.box.checked ? I.defang(it.value, { fileLike: true }).text : it.value);
+
+      function visible() {
+        return items.filter((it) => !hiddenTypes.has(it.type) && !(optHidePrivate.box.checked && it.note && (it.type === 'ipv4' || it.type === 'ipv6')));
+      }
+
+      function run() {
+        items = input.value ? I.extract(input.value, { refangFirst: optRefang.box.checked, fileLike: optFileLike.box.checked }) : [];
+        runBtn.hidden = true;
+        render();
+      }
+
+      function render() {
+        const counts = {};
+        for (const it of items) counts[it.type] = (counts[it.type] || 0) + 1;
+        typeFilters.replaceChildren(...I.TYPES.filter((t) => counts[t.id]).map((t) => {
+          const box = h('input', { type: 'checkbox', checked: !hiddenTypes.has(t.id) });
+          box.addEventListener('change', () => { if (box.checked) hiddenTypes.delete(t.id); else hiddenTypes.add(t.id); render(); });
+          return h('label', { class: 'check chip-check' }, box, `${t.label} (${counts[t.id]})`);
+        }));
+
+        const list = visible();
+        const hidden = items.length - list.length;
+        resultMeta.textContent = items.length ? `${list.length} shown${hidden ? `, ${hidden} hidden` : ''}` : '';
+        if (!items.length) {
+          results.replaceChildren(h('p', { class: 'meta' }, input.value ? 'No indicators found.' : 'Indicators appear here.'));
+          return;
+        }
+        const label = Object.fromEntries(I.TYPES.map((t) => [t.id, t.label]));
+        results.replaceChildren(ui.table(['Type', 'Indicator', 'Count', 'Note', ''], list.map((it) => [
+          label[it.type],
+          h('code', { class: 'ioc-value' }, display(it)),
+          String(it.count),
+          it.note ? h('span', { class: 'badge badge-info' }, it.note) : '',
+          h('span', { class: 'row nowrap' },
+            ui.copyButton(() => display(it)),
+            it.type !== 'email' ? ui.button('Look up', () => ctx.sendTo('lookup', it.value)) : null),
+        ]), { 'aria-label': 'Extracted indicators' }));
+      }
+
+      // Values that start with = + - @ are prefixed with ' so spreadsheets do not run them as formulas.
+      function csvCell(v) {
+        let s = String(v);
+        if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }
+
+      function exportCsv() {
+        const rows = [['type', 'value', 'count', 'note'], ...visible().map((it) => [it.type, display(it), it.count, it.note || ''])];
+        ctx.download('iocs.csv', rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n', 'text/csv;charset=utf-8');
+      }
+
+      function exportJson() {
+        const data = visible().map((it) => ({ type: it.type, value: display(it), count: it.count, ...(it.note ? { note: it.note } : {}) }));
+        ctx.download('iocs.json', JSON.stringify(data, null, 2), 'application/json');
+      }
+
+      function onInput() {
+        inputMeta.textContent = input.value ? `${input.value.length.toLocaleString()} characters` : '';
+        if (input.value.length > AUTO_LIMIT) { runBtn.hidden = false; return; }
+        run();
+      }
+
+      async function loadFile(file) {
+        const text = await ui.readTextFile(file);
+        if (text === null) return;
+        input.value = text;
+        onInput();
+      }
+
+      input.addEventListener('input', ui.debounce(onInput, 250));
+      for (const o of [optRefang, optFileLike]) o.box.addEventListener('change', run);
+      for (const o of [optHidePrivate, optDefang]) o.box.addEventListener('change', render);
+      fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); fileInput.value = ''; });
+      ui.onFileDrop(input, (files) => loadFile(files[0]));
+
+      render();
+
+      return {
+        receive(text) { input.value = text; onInput(); },
+        focus() { input.focus(); },
+      };
+    },
+  });
+})();
+</script>
+<script>
+/*
+ * Defang / Refang module: make indicators safe to paste into tickets, emails and
+ * reports (hxxps[://]evil[.]com), or turn defanged text back into the real thing.
+ * Only indicators are changed; the rest of the text is left exactly as it was.
+ */
+(function () {
+  'use strict';
+
+  const I = window.OAT.ioc;
+
+  window.OAT.register({
+    id: 'defang',
+    name: 'Defang / Refang',
+    summary: 'Defang URLs, domains, IPs and emails for tickets and reports (example[.]com, hxxps://), or refang them back.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+      let mode = 'defang';
+
+      const input = ui.textarea('Paste text containing URLs, domains, IPs or email addresses', 'Text to convert');
+      const output = h('pre', { class: 'output', tabindex: '0', 'aria-label': 'Result', 'aria-live': 'polite', 'data-empty': 'Result appears here' });
+      const meta = h('span', { class: 'meta' });
+      const fileLikeBox = h('input', { type: 'checkbox' });
+
+      const btnDefang = h('button', { type: 'button', 'aria-pressed': 'true', onclick: () => setMode('defang') }, 'Defang');
+      const btnRefang = h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => setMode('refang') }, 'Refang');
+      const fileLikeLabel = h('label', { class: 'check' }, fileLikeBox, 'Also defang file-like domains (.zip, .mov…)');
+
+      root.append(
+        ui.panel('Input', [h('span', { class: 'seg', role: 'group', 'aria-label': 'Direction' }, btnDefang, btnRefang)],
+          input, h('div', { class: 'row options' }, fileLikeLabel)),
+        ui.panel('Result', [meta, ui.copyButton(() => output.textContent),
+          ui.button('Download', () => ctx.download(`${mode}ed.txt`, output.textContent, 'text/plain;charset=utf-8')),
+          ui.sendSelect(() => output.textContent)], output));
+
+      function setMode(m) {
+        mode = m;
+        btnDefang.setAttribute('aria-pressed', String(m === 'defang'));
+        btnRefang.setAttribute('aria-pressed', String(m === 'refang'));
+        fileLikeLabel.hidden = m !== 'defang';
+        run();
+      }
+
+      function run() {
+        const text = input.value;
+        if (!text) { output.textContent = ''; meta.textContent = ''; return; }
+        if (mode === 'defang') {
+          const r = I.defang(text, { fileLike: fileLikeBox.checked });
+          output.textContent = r.text;
+          meta.textContent = `${r.count} indicator${r.count === 1 ? '' : 's'} defanged`;
+        } else {
+          const r = I.refang(text);
+          output.textContent = r;
+          meta.textContent = r === text ? 'Nothing to refang' : 'Refanged';
+        }
+      }
+
+      input.addEventListener('input', ui.debounce(run, 120));
+      fileLikeBox.addEventListener('change', run);
+
+      return {
+        receive(text) { input.value = text; run(); },
+        focus() { input.focus(); },
+      };
+    },
+  });
+})();
+</script>
+<script>
+/*
+ * JWT Decoder module: header, payload, readable time claims, risk flags, and an
+ * optional local HMAC signature check. The token never leaves the page.
+ */
+(function () {
+  'use strict';
+
+  const J = window.OAT.jwt;
+  const T = window.OAT.time;
+  const H = window.OAT.hashes;
+
+  window.OAT.register({
+    id: 'jwt',
+    name: 'JWT Decoder',
+    summary: 'Decode a JSON Web Token: header, payload, readable dates, and flags such as alg "none", expiry and remote keys. Optional HMAC check with your secret.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+      let decoded = null;
+
+      const input = ui.textarea('Paste a JWT (eyJ…), with or without "Bearer "', 'Token', { rows: '4' });
+      const errorBox = h('p', { class: 'notice', hidden: true });
+      const findingsBox = h('div');
+      const headerOut = h('pre', { class: 'output json', tabindex: '0', 'aria-label': 'Header' });
+      const payloadOut = h('pre', { class: 'output json', tabindex: '0', 'aria-label': 'Payload' });
+      const timesBox = h('div');
+      const sigMeta = h('p', { class: 'meta' });
+
+      const secretInput = h('input', { type: 'password', class: 'input mono', autocomplete: 'off', spellcheck: 'false', placeholder: 'Shared secret', 'aria-label': 'Secret' });
+      const showSecret = h('input', { type: 'checkbox' });
+      const b64Secret = h('input', { type: 'checkbox' });
+      const verifyResult = h('span', { class: 'meta' });
+
+      const resultsWrap = h('div', { hidden: true },
+        ui.panel('Findings', null, findingsBox),
+        h('div', { class: 'grid-2' },
+          ui.panel('Header', ui.copyButton(() => headerOut.textContent), headerOut),
+          ui.panel('Payload', [ui.copyButton(() => payloadOut.textContent), ui.sendSelect(() => payloadOut.textContent)], payloadOut)),
+        ui.panel('Time claims', null, timesBox),
+        ui.panel('Signature', null, sigMeta,
+          h('div', { class: 'row' }, secretInput,
+            h('label', { class: 'check' }, showSecret, 'Show'),
+            h('label', { class: 'check' }, b64Secret, 'Secret is Base64'),
+            ui.button('Verify', verify), verifyResult),
+          h('p', { class: 'meta' }, 'HS256/384/512 only. The check runs in this page; the secret is never stored.')));
+
+      root.append(ui.panel('Token', ui.button('Clear', () => { input.value = ''; run(); }), input, errorBox), resultsWrap);
+
+      function run() {
+        verifyResult.textContent = '';
+        verifyResult.className = 'meta';
+        const value = input.value.trim();
+        decoded = null;
+        if (!value) { errorBox.hidden = true; resultsWrap.hidden = true; return; }
+        try {
+          decoded = J.decode(value);
+        } catch (e) {
+          errorBox.textContent = e.message;
+          errorBox.hidden = false;
+          resultsWrap.hidden = true;
+          return;
+        }
+        errorBox.hidden = true;
+        resultsWrap.hidden = false;
+
+        findingsBox.replaceChildren(ui.findings(decoded.findings));
+        headerOut.textContent = JSON.stringify(decoded.header, null, 2);
+        payloadOut.textContent = decoded.payload ? JSON.stringify(decoded.payload, null, 2) : '(encrypted)';
+
+        timesBox.replaceChildren(decoded.times.length
+          ? ui.table(['Claim', 'Value', 'UTC', 'Relative'], decoded.times.map((t) => {
+            const ticks = BigInt(Math.round(t.seconds * 1000)) * 10000n;
+            return [t.claim, String(t.seconds), T.toIso(ticks), T.relative(ticks)];
+          }))
+          : h('p', { class: 'meta' }, 'No time claims.'));
+
+        const alg = decoded.header.alg || '?';
+        sigMeta.textContent = decoded.signature.length
+          ? `alg ${alg} · ${decoded.signature.length}-byte signature · ${H.toHex(decoded.signature).slice(0, 32)}${decoded.signature.length > 16 ? '…' : ''}`
+          : `alg ${alg} · no signature`;
+      }
+
+      function verify() {
+        if (!decoded) return;
+        try {
+          const ok = J.verifyHmac(input.value, secretInput.value, { secretIsBase64: b64Secret.checked });
+          verifyResult.textContent = ok ? '✓ Signature valid with this secret' : '✗ Signature does not match this secret';
+          verifyResult.className = ok ? 'meta ok' : 'meta err';
+        } catch (e) {
+          verifyResult.textContent = e.message;
+          verifyResult.className = 'meta err';
+        }
+      }
+
+      input.addEventListener('input', ui.debounce(run, 120));
+      showSecret.addEventListener('change', () => { secretInput.type = showSecret.checked ? 'text' : 'password'; });
+      secretInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') verify(); });
+
+      return {
+        receive(text) { input.value = text; run(); },
+        focus() { input.focus(); },
+      };
+    },
+  });
+})();
+</script>
+<script>
+/*
+ * Timestamp Converter module: recognise Unix (s/ms/µs/ns), Windows FILETIME /
+ * LDAP, Chrome/WebKit, Apple Cocoa and date strings; show UTC and a chosen time
+ * zone side by side (Africa/Kigali by default), and convert to every format.
+ */
+(function () {
+  'use strict';
+
+  const T = window.OAT.time;
+  const DEFAULT_ZONE = 'Africa/Kigali';
+  const FALLBACK_ZONES = ['UTC', 'Africa/Kigali', 'Africa/Nairobi', 'Africa/Johannesburg', 'Africa/Lagos', 'Europe/London',
+    'Europe/Paris', 'Europe/Berlin', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Asia/Dubai',
+    'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney'];
+
+  window.OAT.register({
+    id: 'time',
+    name: 'Timestamp Converter',
+    summary: 'Unix seconds/ms/µs, Windows FILETIME and LDAP/AD time, Chrome/WebKit, Apple Cocoa, ISO 8601 and email dates. UTC and your time zone side by side.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+      let readings = [];
+      let selected = 0;
+
+      const input = h('input', { type: 'text', class: 'input mono big', spellcheck: 'false', autocomplete: 'off',
+        placeholder: 'e.g. 1700000000, 133444736000000000, 0x01DA1747C66D0000, 2026-10-07 14:00:00', 'aria-label': 'Timestamp' });
+
+      const zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : FALLBACK_ZONES;
+      const zoneSelect = h('select', { 'aria-label': 'Time zone' },
+        h('option', { value: Intl.DateTimeFormat().resolvedOptions().timeZone }, `Browser (${Intl.DateTimeFormat().resolvedOptions().timeZone})`),
+        zones.map((z) => h('option', { value: z }, z)));
+      zoneSelect.value = DEFAULT_ZONE;
+      if (zoneSelect.value !== DEFAULT_ZONE) zoneSelect.selectedIndex = 0;
+
+      const readingsBox = h('div', { class: 'readings' });
+      const convBox = h('div');
+
+      root.append(
+        ui.panel('Input', [h('label', { class: 'row' }, 'Time zone', zoneSelect), ui.button('Now', () => { input.value = String(Math.floor(Date.now() / 1000)); run(); })],
+          input),
+        ui.panel('Readings', null, readingsBox),
+        ui.panel('Convert to', null, convBox));
+
+      function run() {
+        readings = input.value.trim() ? T.interpret(input.value) : [];
+        selected = 0;
+        render();
+      }
+
+      function render() {
+        const zone = zoneSelect.value;
+        if (!input.value.trim()) {
+          readingsBox.replaceChildren(h('p', { class: 'meta' }, 'Enter a timestamp, or press Now.'));
+          convBox.replaceChildren();
+          return;
+        }
+        if (!readings.length) {
+          readingsBox.replaceChildren(h('p', { class: 'notice' }, 'Not a recognised timestamp, or outside 1970–2100.'));
+          convBox.replaceChildren();
+          return;
+        }
+        const card = (r, i) => h('button', {
+          type: 'button', class: 'reading', 'aria-pressed': String(i === selected),
+          onclick: () => { selected = i; render(); },
+        },
+        h('span', { class: 'reading-label' }, r.label),
+        h('span', { class: 'reading-utc mono' }, T.toIso(r.ticks)),
+        h('span', { class: 'reading-zone' }, `${T.inZone(r.ticks, zone)} · ${T.relative(r.ticks)}`));
+
+        const likely = readings.map((r, i) => [r, i]).filter(([r]) => r.likely);
+        const other = readings.map((r, i) => [r, i]).filter(([r]) => !r.likely);
+        readingsBox.replaceChildren(
+          ...likely.map(([r, i]) => card(r, i)),
+          other.length ? h('details', { class: 'other-readings', open: likely.length === 0 || other.some(([, i]) => i === selected) },
+            h('summary', null, `${other.length} less likely reading${other.length === 1 ? '' : 's'}`),
+            ...other.map(([r, i]) => card(r, i))) : null);
+
+        const ticks = readings[selected].ticks;
+        convBox.replaceChildren(ui.table(['Format', 'Value', ''], [
+          ...T.conversions(ticks).map((c) => [c.label, h('code', null, c.value), ui.copyButton(() => c.value)]),
+          [`Time zone (${zone})`, h('code', null, T.inZone(ticks, zone)), ui.copyButton(() => T.inZone(ticks, zone))],
+        ]));
+      }
+
+      input.addEventListener('input', ui.debounce(run, 100));
+      zoneSelect.addEventListener('change', render);
+      render();
+
+      return {
+        receive(text) { input.value = text.trim().split(/\s*\n/)[0]; run(); },
+        focus() { input.focus(); },
+      };
+    },
+  });
+})();
+</script>
+<script>
+/*
+ * Email Header Analyzer module: paste raw headers (or drop a .eml) and see the
+ * relay path, recorded authentication results, sender mismatches and the
+ * originating IP. Nothing is re-checked online.
+ */
+(function () {
+  'use strict';
+
+  const E = window.OAT.email;
+
+  window.OAT.register({
+    id: 'email',
+    name: 'Email Header Analyzer',
+    summary: 'Relay path with delays, SPF/DKIM/DMARC as recorded by the receiving server, From / Reply-To / Return-Path mismatches and the originating IP.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+
+      const input = ui.textarea('Paste the raw headers (Outlook: File › Properties › Internet headers; Gmail: Show original), or drop a .eml file', 'Raw email headers');
+      const fileInput = h('input', { type: 'file', accept: '.eml,.txt,message/rfc822', hidden: true });
+      const out = h('div');
+
+      root.append(
+        ui.panel('Headers', [ui.button('Open .eml…', () => fileInput.click()), ui.button('Clear', () => { input.value = ''; run(); })],
+          input, fileInput,
+          h('p', { class: 'meta' }, 'SPF, DKIM and DMARC are shown as the receiving server recorded them. They cannot be re-verified offline (that needs DNS).')),
+        out);
+
+      function badgeFor(result) {
+        const level = result === 'pass' ? 'pass' : ['fail', 'softfail', 'permerror', 'temperror'].includes(result) ? 'high' : 'info';
+        return h('span', { class: `badge badge-${level}` }, result);
+      }
+
+      function addressCell(a) {
+        if (!a) return h('span', { class: 'meta' }, '(none)');
+        return h('span', null, a.display ? `${a.display} ` : '', h('code', null, `<${a.address}>`));
+      }
+
+      function run() {
+        const raw = input.value;
+        if (!raw.trim()) { out.replaceChildren(); return; }
+        const r = E.analyze(raw);
+        if (!r.headers.length) { out.replaceChildren(h('p', { class: 'notice' }, 'No headers found. Paste the full header block, starting at the first header line.')); return; }
+        const s = r.summary;
+
+        const summaryRows = [
+          ['From', addressCell(s.from)],
+          ['Reply-To', addressCell(s.replyTo)],
+          ['Return-Path', addressCell(s.returnPath)],
+          ['To', s.to],
+          ['Subject', s.subject],
+          ['Date', s.date],
+          ['Message-ID', h('code', null, s.messageId)],
+          ['Mailer', s.mailer || h('span', { class: 'meta' }, '(none)')],
+          ['Originating IP', s.originatingIp
+            ? h('span', { class: 'row nowrap' }, h('code', null, s.originatingIp), h('span', { class: 'meta' }, `from ${s.originatingSource}`),
+              ui.button('Look up', () => ctx.sendTo('lookup', s.originatingIp)))
+            : h('span', { class: 'meta' }, 'No public IP found in the headers')],
+        ];
+
+        const fmtDate = (d) => (d ? d.toISOString().replace('.000Z', 'Z') : '');
+        const fmtDelay = (s) => (s === null ? '' : s < 0 ? `${s}s ⚠` : s < 120 ? `${s}s` : `${Math.round(s / 60)} min`);
+
+        out.replaceChildren(
+          ui.panel('Findings', null, ui.findings(r.findings)),
+          ui.panel('Summary', null, h('dl', { class: 'kv' }, summaryRows.flatMap(([k, v]) => [h('dt', null, k), h('dd', null, v)]))),
+          ui.panel('Authentication', null, r.auth.length
+            ? ui.table(['Method', 'Result', 'Details', 'Source'], r.auth.map((a) => [a.method.toUpperCase(), badgeFor(a.result), a.detail, a.source]))
+            : h('p', { class: 'meta' }, 'No authentication results recorded.')),
+          ui.panel(`Relay path (${r.hops.length} hop${r.hops.length === 1 ? '' : 's'}, oldest first)`, null, r.hops.length
+            ? ui.table(['#', 'From', 'IPs', 'By', 'With', 'Time (UTC)', 'Delay'], r.hops.map((hop, i) => [
+              String(i + 1), hop.from || '', hop.ips.join(', '), hop.by, hop.with, fmtDate(hop.date), fmtDelay(hop.delay)]))
+            : h('p', { class: 'meta' }, 'No Received headers.')),
+          ui.panel('All headers', [ui.sendSelect(() => input.value)],
+            h('details', null, h('summary', null, `${r.headers.length} headers`),
+              ui.table(['Name', 'Value'], r.headers.map((x) => [x.name, x.value])))));
+      }
+
+      async function loadFile(file) {
+        const text = await ui.readTextFile(file, 50 * 1024 * 1024);
+        if (text === null) return;
+        input.value = text;
+        run();
+      }
+
+      input.addEventListener('input', ui.debounce(run, 200));
+      fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); fileInput.value = ''; });
+      ui.onFileDrop(input, (files) => loadFile(files[0]));
+
+      return {
+        receive(text) { input.value = text; run(); },
+        focus() { input.focus(); },
+      };
+    },
+  });
+})();
+</script>
+<script>
+/*
+ * Lookup Links module: one-click links to reputation sites for each indicator.
+ * The toolkit never contacts these sites itself; a link opens only when the
+ * analyst clicks it, in a new tab without a referrer.
+ */
+(function () {
+  'use strict';
+
+  const I = window.OAT.ioc;
+  const L = window.OAT.lookup;
+
+  window.OAT.register({
+    id: 'lookup',
+    name: 'Lookup Links',
+    summary: 'Links to VirusTotal, AbuseIPDB, Shodan, URLhaus, urlscan and more for each indicator. Nothing is contacted until you click.',
+
+    render(root, ctx) {
+      const { h, ui } = ctx;
+
+      const input = ui.textarea('Paste indicators (one per line, or any text; defanged is fine)', 'Indicators', { rows: '5' });
+      const out = h('div');
+
+      root.append(
+        ui.panel('Indicators', ui.button('Clear', () => { input.value = ''; run(); }), input,
+          h('p', { class: 'notice notice-warn' },
+            'Clicking a link sends that indicator to the third-party site. For sensitive cases, think about who can see the lookup: some services show searches publicly, and an attacker watching their own infrastructure may notice.')),
+        ui.panel('Links', null, out));
+
+      const label = Object.fromEntries(I.TYPES.map((t) => [t.id, t.label]));
+
+      function run() {
+        const items = input.value.trim() ? I.extract(input.value, { fileLike: true }) : [];
+        if (!items.length) {
+          out.replaceChildren(h('p', { class: 'meta' }, input.value.trim() ? 'No indicators recognised.' : 'Links appear here.'));
+          return;
+        }
+        out.replaceChildren(ui.table(['Indicator', 'Type', 'Look up on'], items.map((it) => {
+          const links = L.linksFor(it.type, it.value);
+          return [
+            h('code', { class: 'ioc-value' }, it.value),
+            h('span', null, label[it.type], it.note ? h('span', { class: 'badge badge-info' }, it.note) : null),
+            links.length
+              ? h('span', { class: 'row links' }, links.map((l) =>
+                h('a', { class: 'btn btn-small', href: l.url, target: '_blank', rel: 'noopener noreferrer', referrerpolicy: 'no-referrer' }, l.name)))
+              : h('span', { class: 'meta' }, 'No lookups for this type'),
+          ];
+        }), { 'aria-label': 'Lookup links' }));
+      }
+
+      input.addEventListener('input', ui.debounce(run, 200));
+      run();
+
+      return {
+        receive(text) { input.value = text; run(); },
+        focus() { input.focus(); },
+      };
+    },
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'">
+<title>Toolkit Unit Tests</title>
+<style>
+  :root { --bg: #fff; --text: #1b1f24; --ok: #1e7f4f; --err: #b42318; --muted: #5f6b7a; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0f1216; --text: #e6e9ee; --ok: #4cc38a; --err: #ff7b72; --muted: #9aa5b4; } }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; }
+  h1 { font-size: 18px; }
+  .ok { color: var(--ok); } .fail { color: var(--err); }
+  li { margin: 2px 0; } .err { color: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1 id="summary">Running…</h1>
+<ul id="results"></ul>
+<script src="harness.js"></script>
+<script src="../src/lib/codecs.js"></script>
+<script src="../src/lib/hashes.js"></script>
+<script src="../src/lib/tlds.js"></script>
+<script src="../src/lib/ioc.js"></script>
+<script src="../src/lib/jwt.js"></script>
+<script src="../src/lib/time.js"></script>
+<script src="../src/lib/email.js"></script>
+<script src="../src/lib/lookup.js"></script>
+<script src="unit/codecs.test.js"></script>
+<script src="unit/hashes.test.js"></script>
+<script src="unit/ioc.test.js"></script>
+<script src="unit/jwt-time-email.test.js"></script>
+<script>
+  runTests().then((results) => {
+    const list = document.getElementById('results');
+    for (const r of results) {
+      const li = document.createElement('li');
+      li.className = r.ok ? 'ok' : 'fail';
+      li.textContent = `${r.ok ? '✓' : '✗'} ${r.name}`;
+      if (!r.ok) {
+        const e = document.createElement('div');
+        e.className = 'err';
+        e.textContent = r.error;
+        li.append(e);
+      }
+      list.append(li);
+    }
+    const failed = results.filter((r) => !r.ok).length;
+    const summary = document.getElementById('summary');
+    summary.textContent = `${results.length - failed}/${results.length} passed`;
+    summary.className = failed ? 'fail' : 'ok';
+    window.__testResults = results;
+  });
+</script>
+</body>
+</html>

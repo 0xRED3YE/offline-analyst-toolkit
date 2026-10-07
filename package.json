@@ -1,0 +1,17 @@
+{
+  "name": "offline-analyst-toolkit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SOC analyst utilities in one offline HTML file: decode, hash, IOCs, JWT, timestamps, email headers.",
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node tests/run-node.js",
+    "test:e2e": "node tests/e2e/smoke.js",
+    "dev": "python scripts/serve.py 8765",
+    "update-tlds": "node scripts/update-tlds.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}
