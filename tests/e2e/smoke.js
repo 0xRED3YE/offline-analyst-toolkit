@@ -38,8 +38,10 @@ async function launch() {
 
   const network = [];
   const errors = [];
-  const allowed = /^(?:file|data|blob|about|chrome-extension):/;
-  context.on('request', (r) => { if (!allowed.test(r.url())) network.push(r.url()); });
+  // Anything that leaves the machine. Browser-internal pages (edge://, chrome://,
+  // e.g. the downloads panel opened by the CSV export) are not network traffic.
+  const offMachine = /^(?:https?|wss?|ftp):/i;
+  context.on('request', (r) => { if (offMachine.test(r.url())) network.push(r.url()); });
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(e.message));
 
@@ -146,7 +148,7 @@ async function launch() {
   });
 
   await check('no network requests were made', async () => {
-    expect(network.length === 0, `requests: ${network.join(', ')}`);
+    expect(network.length === 0, `${network.length} request(s): ${network.slice(0, 10).join(', ')}`);
   });
 
   await check('no console errors', async () => {
