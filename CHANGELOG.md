@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 (2026-10-07)
 
-All 8 MVP modules.
+First release: all 8 MVP modules.
 
 - **Encode / Decode:** Base64 (standard and URL-safe), hex, URL, HTML entities, ROT13, binary, Unicode escapes, UTF-16LE; recipes with per-step status; auto-detect including PowerShell `-EncodedCommand` and file types; text and hex views.
 - **Hashing:** MD5, SHA-1, SHA-256, SHA-384, SHA-512 of text or files of any size, streamed in a Web Worker with progress and cancel; hash compare.
